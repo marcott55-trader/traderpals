@@ -16,10 +16,19 @@ import {
   isMarketRelevant,
   generateNewsId,
   isFuzzyDuplicate,
-  shouldPost,
 } from "@/lib/news-scoring";
+import {
+  buildClusterId,
+  isStoryAlreadyPosted,
+  markStoryPosted,
+} from "@/lib/story-clustering";
 import { supabase } from "@/lib/supabase";
 import type { RSSItem } from "@/types/news";
+
+// Politics-specific: max 2 posts per 10-min scan cycle
+const POLITICS_MAX_PER_CYCLE = 2;
+// Politics requires higher score — must have source quality or keyword match
+const POLITICS_SCORE_THRESHOLD = 30;
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -119,6 +128,9 @@ export const politicalScan = inngest.createFunction(
       const allItems = [...rssItems, ...finnhubPolitical];
 
       for (const item of allItems) {
+        // Per-cycle cap
+        if (postedCount >= POLITICS_MAX_PER_CYCLE) break;
+
         // Must be market-relevant
         if (!isMarketRelevant(item.title)) continue;
 
@@ -126,16 +138,19 @@ export const politicalScan = inngest.createFunction(
         if (await isAlreadyPosted(newsId)) continue;
         if (recentHeadlines.some((h) => isFuzzyDuplicate(h, item.title))) continue;
 
+        // Story-level dedup: same event already posted in last 4 hours?
+        const clusterId = buildClusterId(item.title);
+        if (await isStoryAlreadyPosted(clusterId, "politics")) continue;
+
         // Score using the same engine
         const { score, shouldReject } = scoreHeadline(
           item.title,
           item.source,
           watchlist,
-          [] // Political news may not have direct ticker relevance
+          []
         );
 
-        // Political news uses a lower threshold (market relevance already confirmed)
-        if (shouldReject || score < 10) continue;
+        if (shouldReject || score < POLITICS_SCORE_THRESHOLD) continue;
 
         const sectors = detectSectors(item.title);
 
@@ -144,7 +159,7 @@ export const politicalScan = inngest.createFunction(
           item.description,
           item.source,
           item.link,
-          undefined, // Impact tickers would require NLP; skip for V1
+          undefined,
           sectors.length > 0 ? sectors : undefined
         );
 
@@ -158,6 +173,7 @@ export const politicalScan = inngest.createFunction(
           headline: item.title,
         });
 
+        await markStoryPosted(clusterId, "politics", item.title);
         recentHeadlines.push(item.title);
         postedCount++;
       }

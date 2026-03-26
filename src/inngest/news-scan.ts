@@ -16,6 +16,11 @@ import {
   isFuzzyDuplicate,
   shouldPost,
 } from "@/lib/news-scoring";
+import {
+  buildClusterId,
+  isStoryAlreadyPosted,
+  markStoryPosted,
+} from "@/lib/story-clustering";
 import { supabase } from "@/lib/supabase";
 import {
   isMarketDay,
@@ -163,6 +168,10 @@ async function scanCompanyNews(step: any) {
           // Dedup: fuzzy match against recent posts
           if (recentHeadlines.some((h) => isFuzzyDuplicate(h, article.headline))) continue;
 
+          // Story-level dedup: same event cluster already posted in last 4 hours?
+          const clusterId = buildClusterId(article.headline);
+          if (await isStoryAlreadyPosted(clusterId, "news")) continue;
+
           // Score
           const relatedTickers = [ticker];
           if (article.related) {
@@ -194,6 +203,7 @@ async function scanCompanyNews(step: any) {
           const embed = buildNewsEmbed(scored);
           await postEmbed("news", embed);
           await markAsPosted(newsId, ticker, "company", "news", article.headline);
+          await markStoryPosted(clusterId, "news", article.headline);
           recentHeadlines.push(article.headline);
           postedCount++;
         }
@@ -276,6 +286,10 @@ async function scanMacroNews(step: any) {
       if (await isAlreadyPosted(newsId)) continue;
       if (recentHeadlines.some((h) => isFuzzyDuplicate(h, article.headline))) continue;
 
+      // Story-level dedup
+      const clusterId = buildClusterId(article.headline);
+      if (await isStoryAlreadyPosted(clusterId, "news")) continue;
+
       // Extract related tickers from the related field
       const relatedTickers = article.related
         ? article.related.split(",").map((t) => t.trim()).filter(Boolean)
@@ -306,6 +320,7 @@ async function scanMacroNews(step: any) {
       const embed = buildNewsEmbed(scored);
       await postEmbed("news", embed);
       await markAsPosted(newsId, relatedTickers[0] ?? null, "macro", "news", article.headline);
+      await markStoryPosted(clusterId, "news", article.headline);
       recentHeadlines.push(article.headline);
       postedCount++;
     }
