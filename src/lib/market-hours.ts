@@ -178,8 +178,26 @@ export function etCronPair(
 }
 
 /**
+ * Build a valid UTC cron hour range string.
+ * When the range wraps past midnight (e.g., 20-1), split into two
+ * comma-separated ranges (e.g., "20,21,22,23,0,1") since cron
+ * does not support wrap-around ranges.
+ */
+function utcHourRange(start: number, end: number): string {
+  if (start <= end) {
+    return `${start}-${end}`;
+  }
+  // Wraps past midnight: enumerate all hours
+  const hours: number[] = [];
+  for (let h = start; h <= 23; h++) hours.push(h);
+  for (let h = 0; h <= end; h++) hours.push(h);
+  return hours.join(",");
+}
+
+/**
  * Build pairs of UTC crons for a repeating interval during an ET time range.
  * E.g., "every 30 min from 10:00-15:30 ET" → crons for both DST offsets.
+ * Handles midnight wraparound correctly.
  */
 export function etIntervalCronPair(
   intervalMinutes: number,
@@ -194,7 +212,7 @@ export function etIntervalCronPair(
   const estStart = (etStartHour + 5) % 24;
   const estEnd = (etEndHour + 5) % 24;
   return [
-    `${minutePart} ${edtStart}-${edtEnd} * * ${daysOfWeek}`,
-    `${minutePart} ${estStart}-${estEnd} * * ${daysOfWeek}`,
+    `${minutePart} ${utcHourRange(edtStart, edtEnd)} * * ${daysOfWeek}`,
+    `${minutePart} ${utcHourRange(estStart, estEnd)} * * ${daysOfWeek}`,
   ];
 }

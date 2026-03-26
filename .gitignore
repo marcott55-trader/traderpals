@@ -37,7 +37,7 @@ yarn-error.log*
 # keep .env.example tracked
 !.env.example
 
-# vercel
+# vercel — never commit CLI state or link config
 .vercel
 
 # resources — PDFs, books, images (too large for git)
