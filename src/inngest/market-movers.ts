@@ -38,6 +38,32 @@ async function getWatchlistTickers(): Promise<Map<string, string>> {
   return map;
 }
 
+interface MoversConfig {
+  minChangePct: number;
+  minPrice: number;
+  maxResults: number;
+  minVolume: number;
+}
+
+async function getMoversConfig(): Promise<MoversConfig> {
+  const { data } = await supabase
+    .from("bot_config")
+    .select("key, value")
+    .like("key", "movers.%");
+
+  const config: Record<string, string> = {};
+  for (const row of data ?? []) {
+    config[row.key] = row.value;
+  }
+
+  return {
+    minChangePct: parseFloat(config["movers.min_change_pct"] ?? "0.5"),
+    minPrice: parseFloat(config["movers.min_price"] ?? "5"),
+    maxResults: parseInt(config["movers.max_results"] ?? "10", 10),
+    minVolume: parseInt(config["movers.min_volume"] ?? "0", 10),
+  };
+}
+
 function sortByAbsChange(movers: MarketMover[]): MarketMover[] {
   return [...movers].sort(
     (a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)
@@ -55,7 +81,8 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
 /** Fetch Finnhub quotes for all watchlist tickers and split into gainers/losers */
 async function fetchMoversFromWatchlist(
   tickers: string[],
-  watchlist: Map<string, string>
+  watchlist: Map<string, string>,
+  config: MoversConfig
 ): Promise<{ gainers: MarketMover[]; losers: MarketMover[] }> {
   const movers: MarketMover[] = [];
 
@@ -73,7 +100,7 @@ async function fetchMoversFromWatchlist(
     for (const result of quotes) {
       if (result.status === "rejected") continue;
       const { ticker, quote } = result.value;
-      if (!quote.c || quote.c === 0) continue; // skip if no price data
+      if (!quote.c || quote.c === 0) continue;
 
       movers.push({
         ticker,
@@ -85,18 +112,26 @@ async function fetchMoversFromWatchlist(
       });
     }
 
-    // Small delay between batches to stay under Finnhub's 60 calls/min
     if (i + batchSize < tickers.length) {
       await new Promise((r) => setTimeout(r, 500));
     }
   }
 
+  // Apply configurable filters
+  const filtered = movers.filter((m) => {
+    if (m.price < config.minPrice) return false;
+    if (Math.abs(m.changePercent) < config.minChangePct) return false;
+    if (config.minVolume > 0 && m.volume < config.minVolume) return false;
+    return true;
+  });
+
   const gainers = sortByAbsChange(
-    movers.filter((m) => m.changePercent > 0 && m.price >= 5)
-  );
+    filtered.filter((m) => m.changePercent > 0)
+  ).slice(0, config.maxResults);
+
   const losers = sortByAbsChange(
-    movers.filter((m) => m.changePercent < 0 && m.price >= 5)
-  );
+    filtered.filter((m) => m.changePercent < 0)
+  ).slice(0, config.maxResults);
 
   return { gainers, losers };
 }
@@ -125,12 +160,17 @@ async function fetchAndPostMovers(
     });
   }
 
+  // Load configurable filters from Supabase
+  const config: MoversConfig = await step.run("load-config", async () => {
+    return getMoversConfig();
+  });
+
   // Fetch quotes for all watchlist tickers via Finnhub
   const { gainers, losers } = await step.run(
     "fetch-movers",
     async () => {
       const tickers = Array.from(watchlistMap.keys());
-      return fetchMoversFromWatchlist(tickers, watchlistMap);
+      return fetchMoversFromWatchlist(tickers, watchlistMap, config);
     }
   );
 

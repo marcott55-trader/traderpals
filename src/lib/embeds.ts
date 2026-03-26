@@ -45,7 +45,8 @@ function formatFuturesLine(q: FuturesQuote): string {
 
 function formatMoverLine(m: MarketMover, rank: number): string {
   const star = m.isWatchlist ? "⭐ " : "";
-  return `${rank}. ${star}${m.ticker}  ${formatChange(m.changePercent)}  ${formatPrice(m.price)}  Vol: ${formatVolume(m.volume)}`;
+  const vol = m.volume > 0 ? `  Vol: ${formatVolume(m.volume)}` : "";
+  return `${rank}. ${star}${m.ticker}  ${formatChange(m.changePercent)}  ${formatPrice(m.price)}${vol}`;
 }
 
 export function buildPremarketEmbed(
@@ -67,7 +68,6 @@ export function buildPremarketEmbed(
     fields.push({
       name: `${tickerEmoji(1)} TOP GAINERS`,
       value: gainers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -77,7 +77,6 @@ export function buildPremarketEmbed(
     fields.push({
       name: `${tickerEmoji(-1)} TOP LOSERS`,
       value: losers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -88,7 +87,7 @@ export function buildPremarketEmbed(
     title: `📊 ${label} — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
-    footer: { text: `Polygon.io • ${getEasternTimeString()}` },
+    footer: { text: `Finnhub • ${getEasternTimeString()}` },
   };
 }
 
@@ -102,7 +101,6 @@ export function buildMarketOpenEmbed(
     fields.push({
       name: `${tickerEmoji(1)} OPENING GAINERS`,
       value: gainers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -112,7 +110,6 @@ export function buildMarketOpenEmbed(
     fields.push({
       name: `${tickerEmoji(-1)} OPENING LOSERS`,
       value: losers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -122,7 +119,7 @@ export function buildMarketOpenEmbed(
     title: `📊 MARKET OPEN — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
-    footer: { text: `Polygon.io • ${getEasternTimeString()}` },
+    footer: { text: `Finnhub • ${getEasternTimeString()}` },
   };
 }
 
@@ -136,7 +133,6 @@ export function buildIntradayEmbed(
     fields.push({
       name: `${tickerEmoji(1)} INTRADAY GAINERS`,
       value: gainers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -146,7 +142,6 @@ export function buildIntradayEmbed(
     fields.push({
       name: `${tickerEmoji(-1)} INTRADAY LOSERS`,
       value: losers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -156,7 +151,7 @@ export function buildIntradayEmbed(
     title: `📊 INTRADAY SCAN — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
-    footer: { text: `Polygon.io • ${getEasternTimeString()}` },
+    footer: { text: `Finnhub • ${getEasternTimeString()}` },
   };
 }
 
@@ -170,7 +165,6 @@ export function buildCloseEmbed(
     fields.push({
       name: `${tickerEmoji(1)} TOP GAINERS TODAY`,
       value: gainers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -180,7 +174,6 @@ export function buildCloseEmbed(
     fields.push({
       name: `${tickerEmoji(-1)} TOP LOSERS TODAY`,
       value: losers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -190,7 +183,7 @@ export function buildCloseEmbed(
     title: `📊 MARKET CLOSE — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
-    footer: { text: `Polygon.io • ${getEasternTimeString()}` },
+    footer: { text: `Finnhub • ${getEasternTimeString()}` },
   };
 }
 
@@ -204,7 +197,6 @@ export function buildAfterHoursEmbed(
     fields.push({
       name: `${tickerEmoji(1)} AFTER-HOURS GAINERS`,
       value: gainers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -214,7 +206,6 @@ export function buildAfterHoursEmbed(
     fields.push({
       name: `${tickerEmoji(-1)} AFTER-HOURS LOSERS`,
       value: losers
-        .slice(0, 10)
         .map((m, i) => formatMoverLine(m, i + 1))
         .join("\n"),
     });
@@ -224,6 +215,6 @@ export function buildAfterHoursEmbed(
     title: `📊 AFTER-HOURS MOVERS — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
-    footer: { text: `Polygon.io • ${getEasternTimeString()}` },
+    footer: { text: `Finnhub • ${getEasternTimeString()}` },
   };
 }
