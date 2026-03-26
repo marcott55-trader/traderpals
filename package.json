@@ -6,7 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "security": "secretlint \"**/*\"",
+    "check": "npm run lint && npm run typecheck && npm run security",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix"
+    ]
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
@@ -17,12 +26,17 @@
     "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@secretlint/core": "^11.4.0",
+    "@secretlint/secretlint-rule-preset-recommend": "^11.4.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "secretlint": "^11.4.0",
     "tailwindcss": "^4",
     "typescript": "^5.9.3"
   }

@@ -122,14 +122,8 @@ export function isAfterHours(): boolean {
 
 /** Returns true if US Eastern is currently in daylight saving time (UTC-4) */
 export function isEDT(): boolean {
-  const jan = new Date(new Date().getFullYear(), 0, 1);
-  const jul = new Date(new Date().getFullYear(), 6, 1);
-  const stdOffset = Math.max(
-    jan.getTimezoneOffset(),
-    jul.getTimezoneOffset()
-  );
-  // This checks the *server's* timezone. For Vercel (UTC), we need a
-  // different approach: compare UTC offset in America/New_York directly.
+  // Compare UTC offset in America/New_York directly.
+  // Works on any server timezone (including Vercel's UTC).
   const nyNow = new Date().toLocaleString("en-US", {
     timeZone: "America/New_York",
     hour: "numeric",

@@ -43,6 +43,9 @@ yarn-error.log*
 # resources — PDFs, books, images (too large for git)
 /resources/
 
+# supabase CLI temp files
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
