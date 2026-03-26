@@ -97,15 +97,15 @@ create index idx_log_module on bot_log (module, created_at desc);
 create table bot_config (
   key text primary key,
   value text not null,
-  updated_at timestamptz default now()
+  description text
 );
 
 -- Default movers config
-insert into bot_config (key, value) values
-  ('movers.min_change_pct', '0.5'),
-  ('movers.min_price', '5'),
-  ('movers.max_results', '10'),
-  ('movers.min_volume', '0');
+insert into bot_config (key, value, description) values
+  ('movers.min_change_pct', '0.5', 'Minimum absolute % change to show a ticker'),
+  ('movers.min_price', '5', 'Minimum stock price (skip penny stocks)'),
+  ('movers.max_results', '10', 'Max gainers/losers to show per section'),
+  ('movers.min_volume', '0', 'Minimum volume to show (0 = disabled until volume data added)');
 
 -- ── Cleanup: auto-delete old posted_news entries ────────────────────
 -- Run via pg_cron if available, or an Inngest weekly function.

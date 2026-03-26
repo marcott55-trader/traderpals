@@ -127,7 +127,7 @@ async function handleAlertCommand(
         return respond(`You have ${MAX_ALERTS_PER_USER} active alerts (max). Remove some first with \`/alert remove\`.`);
       }
 
-      await supabase.from("price_alerts").insert({
+      const { error } = await supabase.from("price_alerts").insert({
         ticker,
         alert_type: subcommand as AlertType,
         level,
@@ -135,52 +135,15 @@ async function handleAlertCommand(
         discord_username: username,
       });
 
+      if (error) return respond("Failed to save alert. Please try again.");
+
       const direction = subcommand === "above" ? ">" : "<";
       return respond(`Alert set: **${ticker}** ${direction} **$${level.toFixed(2)}**`);
     }
 
-    case "ma": {
-      const ticker = String(opts.get("ticker") ?? "").toUpperCase();
-      const period = Number(opts.get("period"));
-
-      if (!ticker || !VALID_MA_PERIODS.includes(period as typeof VALID_MA_PERIODS[number])) {
-        return respond(`Usage: /alert ma TICKER PERIOD\nValid periods: ${VALID_MA_PERIODS.join(", ")}`);
-      }
-
-      const { count } = await supabase
-        .from("price_alerts")
-        .select("id", { count: "exact", head: true })
-        .eq("discord_user_id", userId)
-        .eq("active", true);
-
-      if ((count ?? 0) >= MAX_ALERTS_PER_USER) {
-        return respond(`Max ${MAX_ALERTS_PER_USER} active alerts reached.`);
-      }
-
-      await supabase.from("price_alerts").insert({
-        ticker,
-        alert_type: "ma_cross" as AlertType,
-        ma_period: period,
-        discord_user_id: userId,
-        discord_username: username,
-      });
-
-      return respond(`Alert set: **${ticker}** crosses **${period}-day MA**`);
-    }
-
-    case "vwap": {
-      const ticker = String(opts.get("ticker") ?? "").toUpperCase();
-      if (!ticker) return respond("Usage: /alert vwap TICKER");
-
-      await supabase.from("price_alerts").insert({
-        ticker,
-        alert_type: "vwap" as AlertType,
-        discord_user_id: userId,
-        discord_username: username,
-      });
-
-      return respond(`Alert set: **${ticker}** crosses **VWAP**`);
-    }
+    case "ma":
+    case "vwap":
+      return respond("MA cross and VWAP alerts are not yet supported. Coming soon.");
 
     case "move": {
       const ticker = String(opts.get("ticker") ?? "").toUpperCase();
@@ -190,13 +153,15 @@ async function handleAlertCommand(
         return respond("Usage: /alert move TICKER PERCENT");
       }
 
-      await supabase.from("price_alerts").insert({
+      const { error } = await supabase.from("price_alerts").insert({
         ticker,
         alert_type: "pct_move" as AlertType,
         level: pct,
         discord_user_id: userId,
         discord_username: username,
       });
+
+      if (error) return respond("Failed to save alert. Please try again.");
 
       return respond(`Alert set: **${ticker}** moves **${pct}%** in a session`);
     }

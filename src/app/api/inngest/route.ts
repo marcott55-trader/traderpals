@@ -53,14 +53,15 @@ import {
   priceAlertsExtPostEST,
 } from "@/inngest/price-alerts";
 
-// Flow / Sentiment
-import {
-  flowShortInterest,
-  flowOptionsScanEDT,
-  flowOptionsScanEST,
-  flowRedditScan,
-  flowWeeklySqueezeWatch,
-} from "@/inngest/flow-scan";
+// Flow / Sentiment — DISABLED: placeholder logic, no real signal yet.
+// Uncomment when options/Reddit data sources are implemented.
+// import {
+//   flowShortInterest,
+//   flowOptionsScanEDT,
+//   flowOptionsScanEST,
+//   flowRedditScan,
+//   flowWeeklySqueezeWatch,
+// } from "@/inngest/flow-scan";
 
 // News cleanup
 import { newsCleanup } from "@/inngest/news-cleanup";
@@ -110,12 +111,12 @@ export const { GET, POST, PUT } = serve({
     priceAlertsExtPostEDT,
     priceAlertsExtPostEST,
 
-    // Flow / Sentiment (5 functions)
-    flowShortInterest,
-    flowOptionsScanEDT,
-    flowOptionsScanEST,
-    flowRedditScan,
-    flowWeeklySqueezeWatch,
+    // Flow / Sentiment — DISABLED (placeholder)
+    // flowShortInterest,
+    // flowOptionsScanEDT,
+    // flowOptionsScanEST,
+    // flowRedditScan,
+    // flowWeeklySqueezeWatch,
 
     // Maintenance (1 function)
     newsCleanup,

@@ -82,7 +82,7 @@ export function buildPremarketEmbed(
     });
   }
 
-  const label = isUpdate ? "PRE-MARKET UPDATE" : "PRE-MARKET MOVERS";
+  const label = isUpdate ? "WATCHLIST UPDATE" : "WATCHLIST PRE-MARKET";
   return {
     title: `📊 ${label} — ${getFormattedDate()}`,
     color: COLORS.BLUE,
@@ -116,7 +116,7 @@ export function buildMarketOpenEmbed(
   }
 
   return {
-    title: `📊 MARKET OPEN — ${getFormattedDate()}`,
+    title: `📊 WATCHLIST AT OPEN — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
     footer: { text: `Finnhub • ${getEasternTimeString()}` },
@@ -148,7 +148,7 @@ export function buildIntradayEmbed(
   }
 
   return {
-    title: `📊 INTRADAY SCAN — ${getFormattedDate()}`,
+    title: `📊 WATCHLIST INTRADAY — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
     footer: { text: `Finnhub • ${getEasternTimeString()}` },
@@ -180,7 +180,7 @@ export function buildCloseEmbed(
   }
 
   return {
-    title: `📊 MARKET CLOSE — ${getFormattedDate()}`,
+    title: `📊 WATCHLIST AT CLOSE — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
     footer: { text: `Finnhub • ${getEasternTimeString()}` },
@@ -212,7 +212,7 @@ export function buildAfterHoursEmbed(
   }
 
   return {
-    title: `📊 AFTER-HOURS MOVERS — ${getFormattedDate()}`,
+    title: `📊 WATCHLIST AFTER-HOURS — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
     footer: { text: `Finnhub • ${getEasternTimeString()}` },
