@@ -1,6 +1,5 @@
 import { inngest } from "./client";
-import { getTopGainers, getTopLosers } from "@/lib/polygon";
-import { getFuturesQuotes } from "@/lib/finnhub";
+import { getQuote, getFuturesQuotes } from "@/lib/finnhub";
 import { postEmbed } from "@/lib/discord";
 import {
   buildPremarketEmbed,
@@ -18,11 +17,7 @@ import {
   etCronPair,
   etIntervalCronPair,
 } from "@/lib/market-hours";
-import type {
-  MarketMover,
-  FuturesQuote,
-  PolygonSnapshotTicker,
-} from "@/types/market";
+import type { MarketMover, FuturesQuote } from "@/types/market";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -43,32 +38,6 @@ async function getWatchlistTickers(): Promise<Map<string, string>> {
   return map;
 }
 
-function snapshotToMover(
-  t: PolygonSnapshotTicker,
-  watchlist: Map<string, string>
-): MarketMover {
-  return {
-    ticker: t.ticker,
-    price: t.lastTrade?.p ?? t.day?.c ?? 0,
-    changePercent: t.todaysChangePerc ?? 0,
-    volume: t.day?.v ?? 0,
-    isWatchlist: watchlist.has(t.ticker),
-    tier: watchlist.get(t.ticker) ?? null,
-  };
-}
-
-function filterMovers(
-  movers: MarketMover[],
-  watchlist: Map<string, string>
-): MarketMover[] {
-  return movers.filter((m) => {
-    if (m.price < 5) return false;
-    if (m.volume < 500_000) return false;
-    if (watchlist.has(m.ticker)) return Math.abs(m.changePercent) >= 3;
-    return Math.abs(m.changePercent) >= 5;
-  });
-}
-
 function sortByAbsChange(movers: MarketMover[]): MarketMover[] {
   return [...movers].sort(
     (a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)
@@ -83,11 +52,60 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
   });
 }
 
+/** Fetch Finnhub quotes for all watchlist tickers and split into gainers/losers */
+async function fetchMoversFromWatchlist(
+  tickers: string[],
+  watchlist: Map<string, string>
+): Promise<{ gainers: MarketMover[]; losers: MarketMover[] }> {
+  const movers: MarketMover[] = [];
+
+  // Fetch quotes in parallel (batches of 10 to respect rate limits)
+  const batchSize = 10;
+  for (let i = 0; i < tickers.length; i += batchSize) {
+    const batch = tickers.slice(i, i + batchSize);
+    const quotes = await Promise.allSettled(
+      batch.map(async (ticker) => {
+        const q = await getQuote(ticker);
+        return { ticker, quote: q };
+      })
+    );
+
+    for (const result of quotes) {
+      if (result.status === "rejected") continue;
+      const { ticker, quote } = result.value;
+      if (!quote.c || quote.c === 0) continue; // skip if no price data
+
+      movers.push({
+        ticker,
+        price: quote.c,
+        changePercent: quote.dp ?? 0,
+        volume: 0, // Finnhub quote doesn't include volume
+        isWatchlist: watchlist.has(ticker),
+        tier: watchlist.get(ticker) ?? null,
+      });
+    }
+
+    // Small delay between batches to stay under Finnhub's 60 calls/min
+    if (i + batchSize < tickers.length) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+
+  const gainers = sortByAbsChange(
+    movers.filter((m) => m.changePercent > 0 && m.price >= 5)
+  );
+  const losers = sortByAbsChange(
+    movers.filter((m) => m.changePercent < 0 && m.price >= 5)
+  );
+
+  return { gainers, losers };
+}
+
 // ── Core function: fetch movers and post ────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchAndPostMovers(
-  step: any,
+  // Inngest's step type is complex and version-dependent; any is intentional here
+  step: any, // eslint-disable-line @typescript-eslint/no-explicit-any
   embedType: EmbedType
 ): Promise<void> {
   const watchlistEntries: [string, string][] = await step.run(
@@ -107,36 +125,13 @@ async function fetchAndPostMovers(
     });
   }
 
-  const rawGainers: PolygonSnapshotTicker[] = await step.run(
-    "fetch-gainers",
+  // Fetch quotes for all watchlist tickers via Finnhub
+  const { gainers, losers } = await step.run(
+    "fetch-movers",
     async () => {
-      return getTopGainers();
+      const tickers = Array.from(watchlistMap.keys());
+      return fetchMoversFromWatchlist(tickers, watchlistMap);
     }
-  );
-
-  const rawLosers: PolygonSnapshotTicker[] = await step.run(
-    "fetch-losers",
-    async () => {
-      return getTopLosers();
-    }
-  );
-
-  const gainers = sortByAbsChange(
-    filterMovers(
-      rawGainers.map((t: PolygonSnapshotTicker) =>
-        snapshotToMover(t, watchlistMap)
-      ),
-      watchlistMap
-    )
-  );
-
-  const losers = sortByAbsChange(
-    filterMovers(
-      rawLosers.map((t: PolygonSnapshotTicker) =>
-        snapshotToMover(t, watchlistMap)
-      ),
-      watchlistMap
-    )
   );
 
   // Build the correct embed for this schedule
