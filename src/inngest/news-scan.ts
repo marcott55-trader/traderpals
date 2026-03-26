@@ -2,7 +2,7 @@
  * News Module — #news
  *
  * Schedule:
- *   Every 5 min (6AM-8PM, weekdays)   — Company news scan
+ *   Every 15 min (6AM-8PM, weekdays)  — Company news scan
  *   Every 15 min (6AM-8PM, weekdays)  — Macro/general news scan
  */
 
@@ -24,7 +24,8 @@ import {
   getEasternDateString,
   etIntervalCronPair,
 } from "@/lib/market-hours";
-import type { ScoredArticle, NewsTag } from "@/types/news";
+import type { ScoredArticle } from "@/types/news";
+import { NEWS_MAX_PER_CYCLE } from "@/types/news";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
 
 // ── Every 5 min (6AM-8PM) — Company News Scan ──────────────────────
 
-const [companyEDT, companyEST] = etIntervalCronPair(5, 6, 20);
+const [companyEDT, companyEST] = etIntervalCronPair(15, 6, 20);
 
 export const newsCompanyScanEDT = inngest.createFunction(
   {
@@ -126,6 +127,9 @@ async function scanCompanyNews(step: any) {
     const recentHeadlines = await getRecentHeadlines("news");
     let postedCount = 0;
 
+    // Only consider articles from the last 30 minutes (avoid re-posting old news)
+    const thirtyMinAgo = Math.floor(Date.now() / 1000) - 30 * 60;
+
     // Scan each watchlist ticker
     const tickers = Array.from(watchlist.keys());
 
@@ -145,6 +149,12 @@ async function scanCompanyNews(step: any) {
         const articles = result.value;
 
         for (const article of articles) {
+          // Skip articles older than 30 minutes
+          if (article.datetime < thirtyMinAgo) continue;
+
+          // Stop if we've hit the per-cycle cap
+          if (postedCount >= NEWS_MAX_PER_CYCLE) break;
+
           const newsId = generateNewsId(article.headline, article.source);
 
           // Dedup: exact hash
@@ -187,7 +197,12 @@ async function scanCompanyNews(step: any) {
           recentHeadlines.push(article.headline);
           postedCount++;
         }
+
+        // Break out of ticker loop if cap hit
+        if (postedCount >= NEWS_MAX_PER_CYCLE) break;
       }
+
+      if (postedCount >= NEWS_MAX_PER_CYCLE) break;
 
       // Rate limit pause between batches
       if (i + 5 < tickers.length) {
@@ -251,8 +266,12 @@ async function scanMacroNews(step: any) {
     let postedCount = 0;
 
     const articles = await getGeneralNews();
+    const thirtyMinAgo = Math.floor(Date.now() / 1000) - 30 * 60;
 
     for (const article of articles) {
+      if (article.datetime < thirtyMinAgo) continue;
+      if (postedCount >= NEWS_MAX_PER_CYCLE) break;
+
       const newsId = generateNewsId(article.headline, article.source);
       if (await isAlreadyPosted(newsId)) continue;
       if (recentHeadlines.some((h) => isFuzzyDuplicate(h, article.headline))) continue;

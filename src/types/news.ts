@@ -65,8 +65,11 @@ export const NOISE_KEYWORDS = [
 ] as const;
 
 // Score thresholds
-export const NEWS_SCORE_THRESHOLD = 30;
+export const NEWS_SCORE_THRESHOLD = 50;
 export const NEWS_BREAKING_THRESHOLD = 70;
+
+// Max articles posted per scan cycle (prevents spam)
+export const NEWS_MAX_PER_CYCLE = 3;
 
 // Headline rejection patterns
 export const REJECT_PATTERNS = [
