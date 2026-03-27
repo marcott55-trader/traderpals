@@ -6,8 +6,7 @@ import {
   premarketMovers,
   premarketUpdate,
   marketOpenMovers,
-  intradayMoversEDT,
-  intradayMoversEST,
+  intradayMovers,
   marketCloseMovers,
   afterHoursMovers,
 } from "@/inngest/market-movers";
@@ -32,8 +31,7 @@ import {
 // Econ Calendar
 import {
   econDailyCalendar,
-  econAlertsEDT,
-  econAlertsEST,
+  econAlerts,
   econWeeklyPreview,
 } from "@/inngest/econ-calendar";
 
@@ -42,19 +40,14 @@ import {
   earningsDailyCalendar,
   earningsBMOAlert,
   earningsAMCAlert,
-  earningsBMOResultsEDT,
-  earningsBMOResultsEST,
-  earningsAMCResultsEDT,
-  earningsAMCResultsEST,
+  earningsBMOResults,
+  earningsAMCResults,
   earningsWeeklyPreview,
 } from "@/inngest/earnings";
 
 // News
 import {
-  newsCompanyScanEDT,
-  newsCompanyScanEST,
-  newsMacroScanEDT,
-  newsMacroScanEST,
+  newsScan,
 } from "@/inngest/news-scan";
 
 // Political News
@@ -62,12 +55,9 @@ import { politicalScan } from "@/inngest/political-scan";
 
 // Price Alerts
 import {
-  priceAlertsRegularEDT,
-  priceAlertsRegularEST,
-  priceAlertsExtPreEDT,
-  priceAlertsExtPreEST,
-  priceAlertsExtPostEDT,
-  priceAlertsExtPostEST,
+  priceAlertsRegular,
+  priceAlertsExtPre,
+  priceAlertsExtPost,
 } from "@/inngest/price-alerts";
 
 // Flow / Sentiment — short interest (FINRA) + Reddit scan
@@ -88,8 +78,7 @@ export const { GET, POST, PUT } = serve({
     premarketMovers,
     premarketUpdate,
     marketOpenMovers,
-    intradayMoversEDT,
-    intradayMoversEST,
+    intradayMovers,
     marketCloseMovers,
     afterHoursMovers,
     marketMapPremarket,
@@ -106,36 +95,27 @@ export const { GET, POST, PUT } = serve({
 
     // Econ Calendar (4 functions)
     econDailyCalendar,
-    econAlertsEDT,
-    econAlertsEST,
+    econAlerts,
     econWeeklyPreview,
 
     // Earnings (8 functions)
     earningsDailyCalendar,
     earningsBMOAlert,
     earningsAMCAlert,
-    earningsBMOResultsEDT,
-    earningsBMOResultsEST,
-    earningsAMCResultsEDT,
-    earningsAMCResultsEST,
+    earningsBMOResults,
+    earningsAMCResults,
     earningsWeeklyPreview,
 
-    // News (4 functions)
-    newsCompanyScanEDT,
-    newsCompanyScanEST,
-    newsMacroScanEDT,
-    newsMacroScanEST,
+    // News (1 function)
+    newsScan,
 
     // Political News (1 function)
     politicalScan,
 
     // Price Alerts (6 functions)
-    priceAlertsRegularEDT,
-    priceAlertsRegularEST,
-    priceAlertsExtPreEDT,
-    priceAlertsExtPreEST,
-    priceAlertsExtPostEDT,
-    priceAlertsExtPostEST,
+    priceAlertsRegular,
+    priceAlertsExtPre,
+    priceAlertsExtPost,
 
     // Flow / Sentiment (3 functions — options scan still disabled)
     flowShortInterest,

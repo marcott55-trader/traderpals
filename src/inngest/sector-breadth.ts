@@ -2,7 +2,7 @@ import { inngest } from "./client";
 import { postEmbed } from "@/lib/discord";
 import { buildSectorBreadthEmbed, type SectorBreadthSession } from "@/lib/sector-breadth";
 import { supabase } from "@/lib/supabase";
-import { etCronPair, isMarketDay, isNearETTime } from "@/lib/market-hours";
+import { etCron, isMarketDay, isNearETTime } from "@/lib/market-hours";
 
 async function logSuccess(action: string, details: Record<string, unknown>) {
   await supabase.from("bot_log").insert({
@@ -29,16 +29,16 @@ function makeGuard(targetHour: number, targetMinute: number) {
   };
 }
 
-const [premarket835EDT, premarket835EST] = etCronPair(8, 35);
-const [open1000EDT, open1000EST] = etCronPair(10, 0);
-const [midday1215EDT, midday1215EST] = etCronPair(12, 15);
-const [close345EDT, close345EST] = etCronPair(15, 45);
+const premarket835Cron = etCron(8, 35);
+const open1000Cron = etCron(10, 0);
+const midday1215Cron = etCron(12, 15);
+const close345Cron = etCron(15, 45);
 
 export const sectorBreadthPremarket = inngest.createFunction(
   {
     id: "sector-breadth-premarket",
     retries: 2,
-    triggers: [{ cron: premarket835EDT }, { cron: premarket835EST }],
+    triggers: [{ cron: premarket835Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(8, 35)(step);
@@ -51,7 +51,7 @@ export const sectorBreadthOpen = inngest.createFunction(
   {
     id: "sector-breadth-open",
     retries: 2,
-    triggers: [{ cron: open1000EDT }, { cron: open1000EST }],
+    triggers: [{ cron: open1000Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(10, 0)(step);
@@ -64,7 +64,7 @@ export const sectorBreadthMidday = inngest.createFunction(
   {
     id: "sector-breadth-midday",
     retries: 2,
-    triggers: [{ cron: midday1215EDT }, { cron: midday1215EST }],
+    triggers: [{ cron: midday1215Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(12, 15)(step);
@@ -77,7 +77,7 @@ export const sectorBreadthClose = inngest.createFunction(
   {
     id: "sector-breadth-close",
     retries: 2,
-    triggers: [{ cron: close345EDT }, { cron: close345EST }],
+    triggers: [{ cron: close345Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(15, 45)(step);

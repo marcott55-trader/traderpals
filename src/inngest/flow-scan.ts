@@ -19,7 +19,7 @@ import { scanRedditMentions, saveRedditMentionLog } from "@/lib/reddit";
 import {
   isMarketDay,
   isNearETTime,
-  etCronPair,
+  etCron,
   getFormattedDate,
 } from "@/lib/market-hours";
 import { COLORS, formatVolume } from "@/lib/embeds";
@@ -43,13 +43,13 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
 
 // ── 6:00 PM ET — Daily Short Volume (FINRA) ─────────────────────────
 
-const [si6pmEDT, si6pmEST] = etCronPair(18, 0);
+const si6pmCron = etCron(18, 0);
 
 export const flowShortInterest = inngest.createFunction(
   {
     id: "flow-short-interest",
     retries: 3,
-    triggers: [{ cron: si6pmEDT }, { cron: si6pmEST }],
+    triggers: [{ cron: si6pmCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
@@ -180,13 +180,13 @@ function formatRedditLine(m: RedditMention): string {
 
 // ── Sunday 8 PM ET — Weekly Short Squeeze Watchlist ─────────────────
 
-const [weeklySIEDT, weeklySIEST] = etCronPair(20, 0, "0");
+const weeklySICron = etCron(20, 0, "0");
 
 export const flowWeeklySqueezeWatch = inngest.createFunction(
   {
     id: "flow-weekly-squeeze-watch",
     retries: 3,
-    triggers: [{ cron: weeklySIEDT }, { cron: weeklySIEST }],
+    triggers: [{ cron: weeklySICron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {

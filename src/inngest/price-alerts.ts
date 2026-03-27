@@ -13,9 +13,8 @@ import { buildAlertTriggeredEmbed } from "@/lib/alerts-embeds";
 import { supabase } from "@/lib/supabase";
 import {
   isMarketDay,
-  isEDT,
   getEasternTime,
-  etIntervalCronPair,
+  etIntervalCron,
 } from "@/lib/market-hours";
 import type { PriceAlertRow } from "@/types/alerts";
 import { ALERT_COOLDOWN_MINUTES } from "@/types/alerts";
@@ -178,33 +177,17 @@ async function checkPriceAlerts(step: any) {
 
 // ── Every 1 min (9:30AM-4PM) — Regular Hours Price Check ────────────
 
-const [regularEDT, regularEST] = etIntervalCronPair(1, 9, 16);
+const regularCron = etIntervalCron(1, 9, 16);
 
-export const priceAlertsRegularEDT = inngest.createFunction(
+export const priceAlertsRegular = inngest.createFunction(
   {
-    id: "price-alerts-regular-edt",
+    id: "price-alerts-regular",
     retries: 1,
-    triggers: [{ cron: regularEDT }],
+    triggers: [{ cron: regularCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || !isEDT()) return false;
-      return isRegularSessionWindow();
-    });
-    if (!shouldRun) return { skipped: true };
-    return checkPriceAlerts(step);
-  }
-);
-
-export const priceAlertsRegularEST = inngest.createFunction(
-  {
-    id: "price-alerts-regular-est",
-    retries: 1,
-    triggers: [{ cron: regularEST }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || isEDT()) return false;
+      if (!isMarketDay()) return false;
       return isRegularSessionWindow();
     });
     if (!shouldRun) return { skipped: true };
@@ -214,18 +197,18 @@ export const priceAlertsRegularEST = inngest.createFunction(
 
 // ── Every 2 min (4-9:30AM, 4-8PM) — Extended Hours Price Check ─────
 
-const [extPreEDT, extPreEST] = etIntervalCronPair(2, 4, 9);
-const [extPostEDT, extPostEST] = etIntervalCronPair(2, 16, 20);
+const extPreCron = etIntervalCron(2, 4, 9);
+const extPostCron = etIntervalCron(2, 16, 20);
 
-export const priceAlertsExtPreEDT = inngest.createFunction(
+export const priceAlertsExtPre = inngest.createFunction(
   {
-    id: "price-alerts-ext-pre-edt",
+    id: "price-alerts-ext-pre",
     retries: 1,
-    triggers: [{ cron: extPreEDT }],
+    triggers: [{ cron: extPreCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || !isEDT()) return false;
+      if (!isMarketDay()) return false;
       return isPremarketWindow();
     });
     if (!shouldRun) return { skipped: true };
@@ -233,47 +216,15 @@ export const priceAlertsExtPreEDT = inngest.createFunction(
   }
 );
 
-export const priceAlertsExtPreEST = inngest.createFunction(
+export const priceAlertsExtPost = inngest.createFunction(
   {
-    id: "price-alerts-ext-pre-est",
+    id: "price-alerts-ext-post",
     retries: 1,
-    triggers: [{ cron: extPreEST }],
+    triggers: [{ cron: extPostCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || isEDT()) return false;
-      return isPremarketWindow();
-    });
-    if (!shouldRun) return { skipped: true };
-    return checkPriceAlerts(step);
-  }
-);
-
-export const priceAlertsExtPostEDT = inngest.createFunction(
-  {
-    id: "price-alerts-ext-post-edt",
-    retries: 1,
-    triggers: [{ cron: extPostEDT }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || !isEDT()) return false;
-      return isAfterHoursWindow();
-    });
-    if (!shouldRun) return { skipped: true };
-    return checkPriceAlerts(step);
-  }
-);
-
-export const priceAlertsExtPostEST = inngest.createFunction(
-  {
-    id: "price-alerts-ext-post-est",
-    retries: 1,
-    triggers: [{ cron: extPostEST }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || isEDT()) return false;
+      if (!isMarketDay()) return false;
       return isAfterHoursWindow();
     });
     if (!shouldRun) return { skipped: true };

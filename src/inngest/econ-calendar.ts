@@ -24,8 +24,8 @@ import {
   isNearETTime,
   getEasternDateString,
   getEasternTime,
-  etCronPair,
-  etIntervalCronPair,
+  etCron,
+  etIntervalCron,
 } from "@/lib/market-hours";
 import type { EconEventRow } from "@/types/alerts";
 
@@ -228,13 +228,13 @@ async function fetchAndCacheTodaysEvents(): Promise<EconEventRow[]> {
 
 // ── 5:00 AM ET — Daily Calendar Post ────────────────────────────────
 
-const [daily500EDT, daily500EST] = etCronPair(5, 0);
+const daily500Cron = etCron(5, 0);
 
 export const econDailyCalendar = inngest.createFunction(
   {
     id: "econ-daily-calendar",
     retries: 3,
-    triggers: [{ cron: daily500EDT }, { cron: daily500EST }],
+    triggers: [{ cron: daily500Cron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
@@ -262,42 +262,17 @@ export const econDailyCalendar = inngest.createFunction(
 
 // ── Every 1 min (6AM-4PM ET) — Result Drops ────────────────────────
 
-const [alertsEDT, alertsEST] = etIntervalCronPair(1, 6, 16);
+const alertsCron = etIntervalCron(1, 6, 16);
 
-export const econAlertsEDT = inngest.createFunction(
+export const econAlerts = inngest.createFunction(
   {
-    id: "econ-alerts-edt",
+    id: "econ-alerts",
     retries: 2,
-    triggers: [{ cron: alertsEDT }],
+    triggers: [{ cron: alertsCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
-      // isEDT check — import inline to avoid circular
-      const { isEDT } = await import("@/lib/market-hours");
-      if (!isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 6 && hour <= 16;
-    });
-    if (!shouldRun) return { skipped: true };
-
-    const resultSummary = await checkResultDrops(step);
-
-    return { checked: true, ...resultSummary };
-  }
-);
-
-export const econAlertsEST = inngest.createFunction(
-  {
-    id: "econ-alerts-est",
-    retries: 2,
-    triggers: [{ cron: alertsEST }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay()) return false;
-      const { isEDT } = await import("@/lib/market-hours");
-      if (isEDT()) return false;
       const { hour } = getEasternTime();
       return hour >= 6 && hour <= 16;
     });
@@ -375,13 +350,13 @@ async function checkResultDrops(
 
 // ── Sunday 8 PM ET — Week-Ahead Preview ─────────────────────────────
 
-const [weeklyEDT, weeklyEST] = etCronPair(20, 0, "0"); // Sunday = 0
+const weeklyCron = etCron(20, 0, "0"); // Sunday = 0
 
 export const econWeeklyPreview = inngest.createFunction(
   {
     id: "econ-weekly-preview",
     retries: 3,
-    triggers: [{ cron: weeklyEDT }, { cron: weeklyEST }],
+    triggers: [{ cron: weeklyCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {

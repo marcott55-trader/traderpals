@@ -2,7 +2,7 @@ import { inngest } from "./client";
 import { postEmbed } from "@/lib/discord";
 import { buildMarketMap, type MarketMapSession } from "@/lib/market-map";
 import { supabase } from "@/lib/supabase";
-import { etCronPair, isMarketDay, isNearETTime } from "@/lib/market-hours";
+import { etCron, isMarketDay, isNearETTime } from "@/lib/market-hours";
 
 async function logSuccess(action: string, details: Record<string, unknown>) {
   await supabase.from("bot_log").insert({
@@ -30,16 +30,16 @@ function makeGuard(targetHour: number, targetMinute: number) {
   };
 }
 
-const [premarket845EDT, premarket845EST] = etCronPair(8, 45);
-const [open940EDT, open940EST] = etCronPair(9, 40);
-const [midday1145EDT, midday1145EST] = etCronPair(11, 45);
-const [close330EDT, close330EST] = etCronPair(15, 30);
+const premarket845Cron = etCron(8, 45);
+const open940Cron = etCron(9, 40);
+const midday1145Cron = etCron(11, 45);
+const close330Cron = etCron(15, 30);
 
 export const marketMapPremarket = inngest.createFunction(
   {
     id: "market-map-premarket",
     retries: 2,
-    triggers: [{ cron: premarket845EDT }, { cron: premarket845EST }],
+    triggers: [{ cron: premarket845Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(8, 45)(step);
@@ -52,7 +52,7 @@ export const marketMapOpen = inngest.createFunction(
   {
     id: "market-map-open",
     retries: 2,
-    triggers: [{ cron: open940EDT }, { cron: open940EST }],
+    triggers: [{ cron: open940Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(9, 40)(step);
@@ -65,7 +65,7 @@ export const marketMapMidday = inngest.createFunction(
   {
     id: "market-map-midday",
     retries: 2,
-    triggers: [{ cron: midday1145EDT }, { cron: midday1145EST }],
+    triggers: [{ cron: midday1145Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(11, 45)(step);
@@ -78,7 +78,7 @@ export const marketMapClose = inngest.createFunction(
   {
     id: "market-map-close",
     retries: 2,
-    triggers: [{ cron: close330EDT }, { cron: close330EST }],
+    triggers: [{ cron: close330Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(15, 30)(step);

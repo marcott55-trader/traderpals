@@ -23,11 +23,10 @@ import { supabase } from "@/lib/supabase";
 import {
   isMarketDay,
   isNearETTime,
-  isEDT,
   getEasternDateString,
   getEasternTime,
-  etCronPair,
-  etIntervalCronPair,
+  etCron,
+  etIntervalCron,
 } from "@/lib/market-hours";
 import type { EarningsResult } from "@/types/alerts";
 
@@ -48,13 +47,13 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
 
 // ── 5:15 AM ET — Daily Earnings Calendar ────────────────────────────
 
-const [daily515EDT, daily515EST] = etCronPair(5, 15);
+const daily515Cron = etCron(5, 15);
 
 export const earningsDailyCalendar = inngest.createFunction(
   {
     id: "earnings-daily-calendar",
     retries: 3,
-    triggers: [{ cron: daily515EDT }, { cron: daily515EST }],
+    triggers: [{ cron: daily515Cron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
@@ -115,13 +114,13 @@ export const earningsDailyCalendar = inngest.createFunction(
 
 // ── 6:00 AM ET — BMO Pre-Report Alert ──────────────────────────────
 
-const [bmo600EDT, bmo600EST] = etCronPair(6, 0);
+const bmo600Cron = etCron(6, 0);
 
 export const earningsBMOAlert = inngest.createFunction(
   {
     id: "earnings-bmo-alert",
     retries: 3,
-    triggers: [{ cron: bmo600EDT }, { cron: bmo600EST }],
+    triggers: [{ cron: bmo600Cron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
@@ -153,13 +152,13 @@ export const earningsBMOAlert = inngest.createFunction(
 
 // ── 3:30 PM ET — AMC Pre-Report Alert ──────────────────────────────
 
-const [amc330EDT, amc330EST] = etCronPair(15, 30);
+const amc330Cron = etCron(15, 30);
 
 export const earningsAMCAlert = inngest.createFunction(
   {
     id: "earnings-amc-alert",
     retries: 3,
-    triggers: [{ cron: amc330EDT }, { cron: amc330EST }],
+    triggers: [{ cron: amc330Cron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
@@ -191,34 +190,17 @@ export const earningsAMCAlert = inngest.createFunction(
 
 // ── Every 2 min (5-9 AM) — BMO Result Tracking ─────────────────────
 
-const [bmResultsEDT, bmResultsEST] = etIntervalCronPair(2, 5, 9);
+const bmResultsCron = etIntervalCron(2, 5, 9);
 
-export const earningsBMOResultsEDT = inngest.createFunction(
+export const earningsBMOResults = inngest.createFunction(
   {
-    id: "earnings-bmo-results-edt",
+    id: "earnings-bmo-results",
     retries: 2,
-    triggers: [{ cron: bmResultsEDT }],
+    triggers: [{ cron: bmResultsCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || !isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 5 && hour <= 9;
-    });
-    if (!shouldRun) return { skipped: true };
-    return checkEarningsResults(step);
-  }
-);
-
-export const earningsBMOResultsEST = inngest.createFunction(
-  {
-    id: "earnings-bmo-results-est",
-    retries: 2,
-    triggers: [{ cron: bmResultsEST }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || isEDT()) return false;
+      if (!isMarketDay()) return false;
       const { hour } = getEasternTime();
       return hour >= 5 && hour <= 9;
     });
@@ -229,34 +211,17 @@ export const earningsBMOResultsEST = inngest.createFunction(
 
 // ── Every 2 min (4-8 PM) — AMC Result Tracking ─────────────────────
 
-const [amcResultsEDT, amcResultsEST] = etIntervalCronPair(2, 16, 20);
+const amcResultsCron = etIntervalCron(2, 16, 20);
 
-export const earningsAMCResultsEDT = inngest.createFunction(
+export const earningsAMCResults = inngest.createFunction(
   {
-    id: "earnings-amc-results-edt",
+    id: "earnings-amc-results",
     retries: 2,
-    triggers: [{ cron: amcResultsEDT }],
+    triggers: [{ cron: amcResultsCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || !isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 16 && hour <= 20;
-    });
-    if (!shouldRun) return { skipped: true };
-    return checkEarningsResults(step);
-  }
-);
-
-export const earningsAMCResultsEST = inngest.createFunction(
-  {
-    id: "earnings-amc-results-est",
-    retries: 2,
-    triggers: [{ cron: amcResultsEST }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || isEDT()) return false;
+      if (!isMarketDay()) return false;
       const { hour } = getEasternTime();
       return hour >= 16 && hour <= 20;
     });
@@ -340,13 +305,13 @@ async function checkEarningsResults(step: any) {
 
 // ── Sunday 8 PM ET — Week-Ahead Preview ─────────────────────────────
 
-const [weeklyEDT, weeklyEST] = etCronPair(20, 0, "0"); // Sunday
+const weeklyCron = etCron(20, 0, "0"); // Sunday
 
 export const earningsWeeklyPreview = inngest.createFunction(
   {
     id: "earnings-weekly-preview",
     retries: 3,
-    triggers: [{ cron: weeklyEDT }, { cron: weeklyEST }],
+    triggers: [{ cron: weeklyCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {

@@ -2,8 +2,7 @@
  * News Module — #news
  *
  * Schedule:
- *   Every 5 min (5AM-8PM, weekdays)   — Company news scan
- *   Every 10 min (5AM-8PM, weekdays)  — Macro/general news scan
+ *   Every 30 min (5AM-8PM, weekdays)  — Shared company + macro/general scan
  */
 
 import { inngest } from "./client";
@@ -24,10 +23,9 @@ import {
 import { supabase } from "@/lib/supabase";
 import {
   isMarketDay,
-  isEDT,
   getEasternTime,
   getEasternDateString,
-  etIntervalCronPair,
+  etIntervalCron,
 } from "@/lib/market-hours";
 import type { ScoredArticle } from "@/types/news";
 
@@ -153,41 +151,26 @@ function getPrioritizedTickersForCycle(watchlist: Map<string, string>): string[]
   return Array.from(new Set([...core, ...rotated]));
 }
 
-// ── Every 5 min (5AM-8PM) — Company News Scan ──────────────────────
+// ── Every 30 min (5AM-8PM) — Shared News Scan ──────────────────────
 
-const [companyEDT, companyEST] = etIntervalCronPair(5, 5, 20);
+const newsCron = etIntervalCron(30, 5, 20);
 
-export const newsCompanyScanEDT = inngest.createFunction(
+export const newsScan = inngest.createFunction(
   {
-    id: "news-company-scan-edt",
+    id: "news-scan",
     retries: 2,
-    triggers: [{ cron: companyEDT }],
+    triggers: [{ cron: newsCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || !isEDT()) return false;
+      if (!isMarketDay()) return false;
       const { hour } = getEasternTime();
       return hour >= 5 && hour <= 20;
     });
     if (!shouldRun) return { skipped: true };
-    return scanCompanyNews(step);
-  }
-);
-
-export const newsCompanyScanEST = inngest.createFunction(
-  {
-    id: "news-company-scan-est",
-    retries: 2,
-    triggers: [{ cron: companyEST }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 5 && hour <= 20;
-    });
-    if (!shouldRun) return { skipped: true };
-    return scanCompanyNews(step);
+    const company = await scanCompanyNews(step);
+    const macro = await scanMacroNews(step);
+    return { company, macro };
   }
 );
 
@@ -238,34 +221,25 @@ async function scanCompanyNews(step: any) {
         for (const article of articles) {
           scannedCount++;
 
-          // Skip articles older than 30 minutes
           if (article.datetime < lookbackCutoff) continue;
-
-          // Stop if we've hit the per-cycle cap
           if (postedCount >= maxPerCycle) break;
 
           const newsId = generateNewsId(article.headline, article.source);
-
-          // Dedup: exact hash
           if (await isAlreadyPosted(newsId)) {
             dedupRejected++;
             continue;
           }
-
-          // Dedup: fuzzy match against recent posts
           if (recentHeadlines.some((h) => isFuzzyDuplicate(h, article.headline))) {
             dedupRejected++;
             continue;
           }
 
-          // Story-level dedup: same event cluster already posted in last 4 hours?
           const clusterId = buildClusterId(article.headline);
           if (await isStoryAlreadyPosted(clusterId, "news")) {
             dedupRejected++;
             continue;
           }
 
-          // Score
           const relatedTickers = [ticker];
           if (article.related) {
             relatedTickers.push(...article.related.split(",").map((t) => t.trim()));
@@ -296,21 +270,17 @@ async function scanCompanyNews(step: any) {
             newsId,
           };
 
-          const embed = buildNewsEmbed(scored);
-          await postEmbed("news", embed);
+          await postEmbed("news", buildNewsEmbed(scored));
           await markAsPosted(newsId, ticker, "company", "news", article.headline);
           await markStoryPosted(clusterId, "news", article.headline);
           recentHeadlines.push(article.headline);
           postedCount++;
         }
 
-        // Break out of ticker loop if cap hit
         if (postedCount >= maxPerCycle) break;
       }
 
       if (postedCount >= maxPerCycle) break;
-
-      // Rate limit pause between batches
       if (i + 4 < tickers.length) {
         await new Promise((r) => setTimeout(r, 1000));
       }
@@ -325,50 +295,12 @@ async function scanCompanyNews(step: any) {
     };
   });
 
-  await step.run("log", async () => {
+  await step.run("log-company-scan", async () => {
     await logScanSummary("company-scan", summary);
   });
 
   return summary;
 }
-
-// ── Every 10 min (5AM-8PM) — Macro/General News ────────────────────
-
-const [macroEDT, macroEST] = etIntervalCronPair(10, 5, 20);
-
-export const newsMacroScanEDT = inngest.createFunction(
-  {
-    id: "news-macro-scan-edt",
-    retries: 2,
-    triggers: [{ cron: macroEDT }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || !isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 5 && hour <= 20;
-    });
-    if (!shouldRun) return { skipped: true };
-    return scanMacroNews(step);
-  }
-);
-
-export const newsMacroScanEST = inngest.createFunction(
-  {
-    id: "news-macro-scan-est",
-    retries: 2,
-    triggers: [{ cron: macroEST }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 5 && hour <= 20;
-    });
-    if (!shouldRun) return { skipped: true };
-    return scanMacroNews(step);
-  }
-);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function scanMacroNews(step: any) {

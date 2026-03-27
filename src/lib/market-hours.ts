@@ -109,16 +109,14 @@ export function isAfterHours(): boolean {
   return isMarketDay() && hour >= 16 && hour < 20;
 }
 
-// ── DST-aware cron scheduling ───────────────────────────────────────
+// ── Eastern-time cron scheduling ────────────────────────────────────
 //
-// Inngest crons are UTC-only. Eastern Time switches between UTC-4 (EDT,
-// Mar–Nov) and UTC-5 (EST, Nov–Mar). To fire at the correct ET time,
-// we register TWO crons per schedule — one for each offset — and the
-// function checks whether the current ET time matches before proceeding.
+// Prefer timezone-aware crons for Inngest schedules so one function can
+// cover both EDT and EST:
+//   "TZ=America/New_York 0 7 * * 1-5"
 //
-// Example: "7:00 AM ET" → cron "0 11 * * 1-5" (EDT) + "0 12 * * 1-5" (EST)
-// When EDT is active, the 11 UTC run fires at 7 AM ET and proceeds.
-// The 12 UTC run fires at 8 AM ET, sees the time doesn't match, and skips.
+// The older UTC pair helpers remain for compatibility with any schedules
+// we have not consolidated yet.
 
 /** Returns true if US Eastern is currently in daylight saving time (UTC-4) */
 export function isEDT(): boolean {
@@ -137,6 +135,8 @@ export function isEDT(): boolean {
   const normalizedOffset = ((offset % 24) + 24) % 24;
   return normalizedOffset === 4;
 }
+
+const EASTERN_TZ = "America/New_York";
 
 /**
  * Check if now (in ET) matches a target ET hour:minute within a tolerance.
@@ -177,6 +177,15 @@ export function etCronPair(
   ];
 }
 
+/** Build a timezone-aware cron that always runs in New York local time. */
+export function etCron(
+  etHour: number,
+  etMinute: number = 0,
+  daysOfWeek: string = "1-5"
+): string {
+  return `TZ=${EASTERN_TZ} ${etMinute} ${etHour} * * ${daysOfWeek}`;
+}
+
 /**
  * Build a valid UTC cron hour range string.
  * When the range wraps past midnight (e.g., 20-1), split into two
@@ -215,4 +224,16 @@ export function etIntervalCronPair(
     `${minutePart} ${utcHourRange(edtStart, edtEnd)} * * ${daysOfWeek}`,
     `${minutePart} ${utcHourRange(estStart, estEnd)} * * ${daysOfWeek}`,
   ];
+}
+
+/** Build a timezone-aware cron for a repeating interval in New York time. */
+export function etIntervalCron(
+  intervalMinutes: number,
+  etStartHour: number,
+  etEndHour: number,
+  daysOfWeek: string = "1-5"
+): string {
+  const minutePart =
+    intervalMinutes === 1 ? "*" : `*/${intervalMinutes}`;
+  return `TZ=${EASTERN_TZ} ${minutePart} ${etStartHour}-${etEndHour} * * ${daysOfWeek}`;
 }

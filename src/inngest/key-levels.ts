@@ -2,7 +2,7 @@ import { inngest } from "./client";
 import { postEmbed } from "@/lib/discord";
 import { buildKeyLevelsEmbed, type KeyLevelsSession } from "@/lib/key-levels";
 import { supabase } from "@/lib/supabase";
-import { etCronPair, isMarketDay, isNearETTime } from "@/lib/market-hours";
+import { etCron, isMarketDay, isNearETTime } from "@/lib/market-hours";
 
 async function logSuccess(action: string, details: Record<string, unknown>) {
   await supabase.from("bot_log").insert({
@@ -29,15 +29,15 @@ function makeGuard(targetHour: number, targetMinute: number) {
   };
 }
 
-const [premarket850EDT, premarket850EST] = etCronPair(8, 50);
-const [open1005EDT, open1005EST] = etCronPair(10, 5);
-const [midday1230EDT, midday1230EST] = etCronPair(12, 30);
+const premarket850Cron = etCron(8, 50);
+const open1005Cron = etCron(10, 5);
+const midday1230Cron = etCron(12, 30);
 
 export const keyLevelsPremarket = inngest.createFunction(
   {
     id: "key-levels-premarket",
     retries: 2,
-    triggers: [{ cron: premarket850EDT }, { cron: premarket850EST }],
+    triggers: [{ cron: premarket850Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(8, 50)(step);
@@ -50,7 +50,7 @@ export const keyLevelsOpen = inngest.createFunction(
   {
     id: "key-levels-open",
     retries: 2,
-    triggers: [{ cron: open1005EDT }, { cron: open1005EST }],
+    triggers: [{ cron: open1005Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(10, 5)(step);
@@ -63,7 +63,7 @@ export const keyLevelsMidday = inngest.createFunction(
   {
     id: "key-levels-midday",
     retries: 2,
-    triggers: [{ cron: midday1230EDT }, { cron: midday1230EST }],
+    triggers: [{ cron: midday1230Cron }],
   },
   async ({ step }) => {
     const shouldRun = await makeGuard(12, 30)(step);
