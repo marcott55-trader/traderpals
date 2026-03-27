@@ -23,6 +23,11 @@ import {
   sectorBreadthMidday,
   sectorBreadthClose,
 } from "@/inngest/sector-breadth";
+import {
+  keyLevelsPremarket,
+  keyLevelsOpen,
+  keyLevelsMidday,
+} from "@/inngest/key-levels";
 
 // Econ Calendar
 import {
@@ -95,6 +100,9 @@ export const { GET, POST, PUT } = serve({
     sectorBreadthOpen,
     sectorBreadthMidday,
     sectorBreadthClose,
+    keyLevelsPremarket,
+    keyLevelsOpen,
+    keyLevelsMidday,
 
     // Econ Calendar (4 functions)
     econDailyCalendar,

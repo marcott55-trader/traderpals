@@ -1,4 +1,9 @@
-import type { PolygonSnapshotResponse, PolygonSnapshotTicker } from "@/types/market";
+import type {
+  PolygonAggBar,
+  PolygonAggsResponse,
+  PolygonSnapshotResponse,
+  PolygonSnapshotTicker,
+} from "@/types/market";
 
 const BASE_URL = "https://api.polygon.io";
 
@@ -55,6 +60,34 @@ export async function getTickerSnapshots(
     `/v2/snapshot/locale/us/markets/stocks/tickers?tickers=${tickerList}`
   );
   return data.tickers ?? [];
+}
+
+function formatDateForPolygon(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export async function getMinuteBars(
+  ticker: string,
+  from: string,
+  to: string
+): Promise<PolygonAggBar[]> {
+  const data = await polygonFetch<PolygonAggsResponse>(
+    `/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/minute/${from}/${to}?adjusted=true&sort=asc&limit=50000`
+  );
+  return data.results ?? [];
+}
+
+export async function getRecentMinuteBars(
+  ticker: string,
+  lookbackDays: number = 2
+): Promise<PolygonAggBar[]> {
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(to.getDate() - lookbackDays);
+  return getMinuteBars(ticker, formatDateForPolygon(from), formatDateForPolygon(to));
 }
 
 // ── Low Float Scanner (uses FMP for real free float data) ───────────

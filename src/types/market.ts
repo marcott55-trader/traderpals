@@ -46,6 +46,22 @@ export interface PolygonSnapshotResponse {
   tickers: PolygonSnapshotTicker[];
 }
 
+export interface PolygonAggBar {
+  c: number;
+  h: number;
+  l: number;
+  o: number;
+  t: number;
+  v: number;
+  vw?: number;
+}
+
+export interface PolygonAggsResponse {
+  results?: PolygonAggBar[];
+  status: string;
+  ticker?: string;
+}
+
 // Processed types used by our modules
 
 export interface MarketMover {
