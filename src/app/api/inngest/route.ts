@@ -31,7 +31,7 @@ import {
 // Econ Calendar
 import {
   econDailyCalendar,
-  econAlerts,
+  econFedSpeakerAlerts,
   econWeeklyPreview,
 } from "@/inngest/econ-calendar";
 
@@ -52,13 +52,6 @@ import {
 
 // Political News
 import { politicalScan } from "@/inngest/political-scan";
-
-// Price Alerts
-import {
-  priceAlertsRegular,
-  priceAlertsExtPre,
-  priceAlertsExtPost,
-} from "@/inngest/price-alerts";
 
 // Flow / Sentiment — short interest (FINRA) + Reddit scan
 // Options flow scan remains disabled until Polygon Starter is confirmed
@@ -95,7 +88,7 @@ export const { GET, POST, PUT } = serve({
 
     // Econ Calendar (4 functions)
     econDailyCalendar,
-    econAlerts,
+    econFedSpeakerAlerts,
     econWeeklyPreview,
 
     // Earnings (8 functions)
@@ -111,11 +104,6 @@ export const { GET, POST, PUT } = serve({
 
     // Political News (1 function)
     politicalScan,
-
-    // Price Alerts (6 functions)
-    priceAlertsRegular,
-    priceAlertsExtPre,
-    priceAlertsExtPost,
 
     // Flow / Sentiment (3 functions — options scan still disabled)
     flowShortInterest,

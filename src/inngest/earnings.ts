@@ -5,8 +5,8 @@
  *   5:15 AM ET (weekdays)    — Daily earnings calendar
  *   6:00 AM ET (weekdays)    — Pre-report alert (BMO watchlist)
  *   3:30 PM ET (weekdays)    — Pre-report alert (AMC watchlist)
- *   Every 2 min (5-9 AM)     — Result tracking (BMO window)
- *   Every 2 min (4-8 PM)     — Result tracking (AMC window)
+ *   Every 30 min (5-9 AM)    — Result tracking (BMO window)
+ *   Every 30 min (4-8 PM)    — Result tracking (AMC window)
  *   8:00 PM ET Sunday        — Week-ahead preview
  */
 
@@ -188,9 +188,9 @@ export const earningsAMCAlert = inngest.createFunction(
   }
 );
 
-// ── Every 2 min (5-9 AM) — BMO Result Tracking ─────────────────────
+// ── Every 30 min (5-9 AM) — BMO Result Tracking ────────────────────
 
-const bmResultsCron = etIntervalCron(2, 5, 9);
+const bmResultsCron = etIntervalCron(30, 5, 9);
 
 export const earningsBMOResults = inngest.createFunction(
   {
@@ -209,9 +209,9 @@ export const earningsBMOResults = inngest.createFunction(
   }
 );
 
-// ── Every 2 min (4-8 PM) — AMC Result Tracking ─────────────────────
+// ── Every 30 min (4-8 PM) — AMC Result Tracking ────────────────────
 
-const amcResultsCron = etIntervalCron(2, 16, 20);
+const amcResultsCron = etIntervalCron(30, 16, 20);
 
 export const earningsAMCResults = inngest.createFunction(
   {

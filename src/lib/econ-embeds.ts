@@ -80,6 +80,17 @@ function formatEventTime(time: string): string {
 export function buildPreEventAlertEmbed(event: EconEventRow): DiscordEmbed {
   const fields = [];
   const time = event.event_time ? formatEventTime(event.event_time) : "Soon";
+  const speaker = event.speaker_name?.toLowerCase() ?? "";
+  const isPowell = speaker.includes("powell");
+  const isTopTierFedSpeaker =
+    isPowell ||
+    [
+      "jefferson",
+      "williams",
+      "waller",
+      "barkin",
+      "daly",
+    ].some((name) => speaker.includes(name));
 
   fields.push({ name: "Time", value: time, inline: true });
 
@@ -100,9 +111,13 @@ export function buildPreEventAlertEmbed(event: EconEventRow): DiscordEmbed {
   }
 
   const emoji = event.is_fed_speech ? "🏛️" : "⏰";
+  const color = isPowell ? COLORS.RED : isTopTierFedSpeaker ? COLORS.YELLOW : COLORS.BLUE;
+  const titlePrefix = isPowell ? "CHAIR WATCH" : isTopTierFedSpeaker ? "FED SPEAKER WATCH" : "";
   return {
-    title: `${emoji} ${event.event_name} in 15 Minutes`,
-    color: COLORS.YELLOW,
+    title: titlePrefix
+      ? `${emoji} ${titlePrefix} — ${event.event_name} in 15 Minutes`
+      : `${emoji} ${event.event_name} in 15 Minutes`,
+    color,
     fields,
     footer: { text: "⚠️ Expect volatility" },
   };

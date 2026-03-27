@@ -3,7 +3,7 @@
  *
  * Schedule:
  *   5:00 AM ET (weekdays)  — Daily calendar post
- *   Every 1 min (6AM-4PM)  — Result drops (poll for actuals)
+ *   Every 15 min (6AM-8PM) — Enhanced Fed speaker reminders
  *   8:00 PM ET Sunday      — Week-ahead preview
  */
 
@@ -15,7 +15,7 @@ import { getEconomicCalendar } from "@/lib/finnhub";
 import { postEmbed } from "@/lib/discord";
 import {
   buildDailyEconCalendarEmbed,
-  buildResultDropEmbed,
+  buildPreEventAlertEmbed,
   buildWeeklyPreviewEmbed,
 } from "@/lib/econ-embeds";
 import { supabase } from "@/lib/supabase";
@@ -65,6 +65,21 @@ function timeToMinutes(value: string | null): number | null {
   if (!value) return null;
   const [hour, minute] = value.split(":").map(Number);
   return hour * 60 + minute;
+}
+
+function isEnhancedFedSpeakerEvent(event: EconEventRow): boolean {
+  if (!event.is_fed_speech) return false;
+  const speaker = event.speaker_name?.toLowerCase() ?? "";
+
+  if (speaker.includes("powell")) return true;
+
+  return [
+    "jefferson",
+    "williams",
+    "waller",
+    "barkin",
+    "daly",
+  ].some((name) => speaker.includes(name));
 }
 
 function normalizeEventName(name: string): string {
@@ -260,91 +275,79 @@ export const econDailyCalendar = inngest.createFunction(
   }
 );
 
-// ── Every 1 min (6AM-4PM ET) — Result Drops ────────────────────────
+// ── Every 15 min (6AM-8PM ET) — Enhanced Fed Speaker Reminders ─────
 
-const alertsCron = etIntervalCron(1, 6, 16);
+const speakerAlertsCron = etIntervalCron(15, 6, 20);
 
-export const econAlerts = inngest.createFunction(
+export const econFedSpeakerAlerts = inngest.createFunction(
   {
-    id: "econ-alerts",
+    id: "econ-fed-speaker-alerts",
     retries: 2,
-    triggers: [{ cron: alertsCron }],
+    triggers: [{ cron: speakerAlertsCron }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
       const { hour } = getEasternTime();
-      return hour >= 6 && hour <= 16;
+      return hour >= 6 && hour <= 20;
     });
     if (!shouldRun) return { skipped: true };
 
-    const resultSummary = await checkResultDrops(step);
+    const reminderSummary = await checkFedSpeakerReminders(step);
 
-    return { checked: true, ...resultSummary };
+    return { checked: true, ...reminderSummary };
   }
 );
 
-async function checkResultDrops(
+async function checkFedSpeakerReminders(
   step: GetStepTools<typeof inngest>
-): Promise<{ resultCandidates: number; resultsPosted: number }> {
-  return step.run("check-results", async () => {
+): Promise<{ reminderCandidates: number; remindersPosted: number }> {
+  return step.run("check-speaker-reminders", async () => {
     const today = getEasternDateString();
-    const econCalendar = await getEconomicCalendar(today, today).catch(() => []);
-
-    // Get today's timed events that have not been posted yet.
     const { data: events } = await supabase
       .from("econ_events")
       .select("*")
       .eq("event_date", today)
-      .eq("result_posted", false)
+      .eq("alert_sent", false)
+      .eq("is_fed_speech", true)
       .not("event_time", "is", null);
 
     if (!events || events.length === 0) {
-      return { resultCandidates: 0, resultsPosted: 0 };
+      return { reminderCandidates: 0, remindersPosted: 0 };
     }
 
-    let resultsPosted = 0;
+    let remindersPosted = 0;
     const { hour, minute } = getEasternTime();
     const nowMinutes = hour * 60 + minute;
 
     for (const event of events as EconEventRow[]) {
+      if (!isEnhancedFedSpeakerEvent(event)) continue;
+
       const eventMinutes = timeToMinutes(event.event_time);
+      if (eventMinutes == null) continue;
 
-      if (eventMinutes != null && eventMinutes > nowMinutes + 2) continue;
+      const minutesUntil = eventMinutes - nowMinutes;
+      if (minutesUntil < 0 || minutesUntil > 15) continue;
 
-      const match = findEconomicCalendarMatch(event.event_name, econCalendar);
-      if (!match || !match.actual) continue;
-
-      const updatedEvent: EconEventRow = {
-        ...event,
-        forecast: match.estimate,
-        previous: match.prev,
-        actual: match.actual,
-        result_posted: true,
-      };
-
-      await postEmbed("econ-calendar", buildResultDropEmbed(updatedEvent));
+      await postEmbed("econ-calendar", buildPreEventAlertEmbed(event));
 
       await supabase
         .from("econ_events")
         .update({
-          forecast: match.estimate,
-          previous: match.prev,
-          actual: match.actual,
-          result_posted: true,
+          alert_sent: true,
         })
         .eq("id", event.id);
 
-      await logSuccess("result-drop", {
+      await logSuccess("fed-speaker-reminder", {
         event: event.event_name,
-        actual: match.actual,
-        forecast: match.estimate,
+        speaker: event.speaker_name,
+        minutesUntil,
       });
 
-      resultsPosted += 1;
+      remindersPosted += 1;
     }
 
-    return { resultCandidates: events.length, resultsPosted };
+    return { reminderCandidates: events.length, remindersPosted };
   });
 }
 
