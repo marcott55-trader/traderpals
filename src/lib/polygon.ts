@@ -57,68 +57,68 @@ export async function getTickerSnapshots(
   return data.tickers ?? [];
 }
 
-// ── Ticker Details (for float/shares outstanding) ───────────────────
-
-interface PolygonTickerDetails {
-  results?: {
-    share_class_shares_outstanding?: number;
-    weighted_shares_outstanding?: number;
-    market_cap?: number;
-    type?: string;
-    name?: string;
-  };
-}
-
-/** Get shares outstanding (float proxy) for a ticker */
-export async function getSharesOutstanding(
-  ticker: string
-): Promise<number | null> {
-  try {
-    const data = await polygonFetch<PolygonTickerDetails>(
-      `/v3/reference/tickers/${encodeURIComponent(ticker)}`
-    );
-    return data.results?.share_class_shares_outstanding ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** Batch fetch shares outstanding for multiple tickers */
-export async function batchGetSharesOutstanding(
-  tickers: string[]
-): Promise<Map<string, number>> {
-  const result = new Map<string, number>();
-
-  // Fetch in batches of 5 to stay within rate limits
-  for (let i = 0; i < tickers.length; i += 5) {
-    const batch = tickers.slice(i, i + 5);
-    const promises = batch.map(async (ticker) => {
-      const shares = await getSharesOutstanding(ticker);
-      if (shares !== null) result.set(ticker, shares);
-    });
-    await Promise.allSettled(promises);
-
-    if (i + 5 < tickers.length) {
-      await new Promise((r) => setTimeout(r, 1200)); // Rate limit pause
-    }
-  }
-
-  return result;
-}
-
-// ── Low Float Scanner ───────────────────────────────────────────────
+// ── Low Float Scanner (uses FMP for real free float data) ───────────
 
 export interface LowFloatMover {
   ticker: string;
   price: number;
   changePercent: number;
   volume: number;
-  float: number;
+  float: number; // actual free float shares from FMP
+}
+
+interface FMPFloatResponse {
+  symbol: string;
+  freeFloat: number; // percentage
+  floatShares: number; // actual free float share count
+  outstandingShares: number;
+}
+
+/** Fetch free float for a single ticker from Financial Modeling Prep */
+async function getFreeFloat(ticker: string): Promise<number | null> {
+  const apiKey = process.env.FMP_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch(
+      `https://financialmodelingprep.com/stable/shares-float?symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`
+    );
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as FMPFloatResponse[];
+    return data?.[0]?.floatShares ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Batch fetch free float for multiple tickers from FMP */
+async function batchGetFreeFloat(
+  tickers: string[]
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+
+  // FMP free tier: 250 calls/day. Fetch in batches of 5.
+  for (let i = 0; i < tickers.length; i += 5) {
+    const batch = tickers.slice(i, i + 5);
+    const promises = batch.map(async (ticker) => {
+      const floatShares = await getFreeFloat(ticker);
+      if (floatShares !== null) result.set(ticker, floatShares);
+    });
+    await Promise.allSettled(promises);
+
+    if (i + 5 < tickers.length) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+
+  return result;
 }
 
 /**
- * Scan Polygon gainers/losers for low-float stocks.
- * Filters: float 100K-20M, volume >= 100K, any price (including sub-penny).
+ * Scan Polygon gainers/losers for low free-float stocks.
+ * Uses FMP API for real free float data (not shares outstanding).
+ * Filters: free float 100K-20M, volume >= 100K, any price.
  */
 export async function getLowFloatMovers(
   minFloat: number = 100_000,
@@ -132,22 +132,22 @@ export async function getLowFloatMovers(
 
   const allMovers = [...rawGainers, ...rawLosers];
 
-  // Filter out warrants and tickers with no volume
+  // Pre-filter: skip warrants, require min volume
   const candidates = allMovers.filter((t) => {
     const vol = t.min?.av ?? t.day?.v ?? 0;
     return vol >= minVolume && !t.ticker.includes("W");
   });
 
-  // Fetch shares outstanding for candidates
+  // Fetch real free float from FMP
   const tickerList = candidates.map((t) => t.ticker);
-  const sharesMap = await batchGetSharesOutstanding(tickerList);
+  const floatMap = await batchGetFreeFloat(tickerList);
 
   const lowFloat: LowFloatMover[] = [];
 
   for (const t of candidates) {
-    const shares = sharesMap.get(t.ticker);
-    if (shares === undefined) continue;
-    if (shares < minFloat || shares > maxFloat) continue;
+    const freeFloat = floatMap.get(t.ticker);
+    if (freeFloat === undefined) continue;
+    if (freeFloat < minFloat || freeFloat > maxFloat) continue;
 
     const price = t.lastTrade?.p ?? t.min?.c ?? t.prevDay?.c ?? 0;
     const vol = t.min?.av ?? t.day?.v ?? 0;
@@ -157,7 +157,7 @@ export async function getLowFloatMovers(
       price,
       changePercent: t.todaysChangePerc ?? 0,
       volume: vol,
-      float: shares,
+      float: freeFloat,
     });
   }
 
