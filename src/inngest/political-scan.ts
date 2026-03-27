@@ -2,7 +2,7 @@
  * Political News Module — #politics
  *
  * Schedule:
- *   Every 10 min (24/7) — RSS + Finnhub scan
+ *   Every 45 min (24/7) — RSS + Finnhub scan
  *   Runs 24/7 because major political events happen outside market hours.
  */
 
@@ -90,13 +90,13 @@ function detectSectors(headline: string): string[] {
   return sectors;
 }
 
-// ── Every 15 min — Political Scan ───────────────────────────────────
+// ── Every 45 min — Political Scan ───────────────────────────────────
 
 export const politicalScan = inngest.createFunction(
   {
     id: "political-scan",
     retries: 2,
-    triggers: [{ cron: "*/15 * * * *" }], // Every 15 min, 24/7 — UTC is fine
+    triggers: [{ cron: "*/45 * * * *" }], // Every 45 min, 24/7 — UTC is fine
   },
   async ({ step }) => {
     const posted = await step.run("scan-political", async () => {

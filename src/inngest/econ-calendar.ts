@@ -3,7 +3,7 @@
  *
  * Schedule:
  *   5:00 AM ET (weekdays)  — Daily calendar post
- *   Every 15 min (6AM-8PM) — Enhanced Fed speaker reminders
+ *   Every 30 min (6AM-8PM) — Enhanced Fed speaker reminders
  *   8:00 PM ET Sunday      — Week-ahead preview
  */
 
@@ -275,9 +275,9 @@ export const econDailyCalendar = inngest.createFunction(
   }
 );
 
-// ── Every 15 min (6AM-8PM ET) — Enhanced Fed Speaker Reminders ─────
+// ── Every 30 min (6AM-8PM ET) — Enhanced Fed Speaker Reminders ─────
 
-const speakerAlertsCron = etIntervalCron(15, 6, 20);
+const speakerAlertsCron = etIntervalCron(30, 6, 20);
 
 export const econFedSpeakerAlerts = inngest.createFunction(
   {

@@ -1,5 +1,6 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/inngest/client";
+import { isWebhookEnabledFor } from "@/lib/webhook-flags";
 
 // Market Movers (existing)
 import {
@@ -57,7 +58,6 @@ import { politicalScan } from "@/inngest/political-scan";
 // Options flow scan remains disabled until Polygon Starter is confirmed
 import {
   flowShortInterest,
-  flowRedditScan,
   flowWeeklySqueezeWatch,
 } from "@/inngest/flow-scan";
 
@@ -88,29 +88,23 @@ export const { GET, POST, PUT } = serve({
 
     // Econ Calendar (4 functions)
     econDailyCalendar,
-    econFedSpeakerAlerts,
     econWeeklyPreview,
 
-    // Earnings (8 functions)
+    // Earnings
     earningsDailyCalendar,
     earningsBMOAlert,
     earningsAMCAlert,
-    earningsBMOResults,
-    earningsAMCResults,
     earningsWeeklyPreview,
 
-    // News (1 function)
-    newsScan,
-
-    // Political News (1 function)
-    politicalScan,
-
-    // Flow / Sentiment (3 functions — options scan still disabled)
+    // Flow / Sentiment
     flowShortInterest,
-    flowRedditScan,
     flowWeeklySqueezeWatch,
 
-    // Maintenance (1 function)
+    // Maintenance
     newsCleanup,
+    ...(!isWebhookEnabledFor("econ") ? [econFedSpeakerAlerts] : []),
+    ...(!isWebhookEnabledFor("earnings") ? [earningsBMOResults, earningsAMCResults] : []),
+    ...(!isWebhookEnabledFor("news") ? [newsScan] : []),
+    ...(!isWebhookEnabledFor("politics") ? [politicalScan] : []),
   ],
 });
