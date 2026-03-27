@@ -1,6 +1,5 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/inngest/client";
-import { isWebhookEnabledFor } from "@/lib/webhook-flags";
 
 // Market Movers (existing)
 import {
@@ -88,13 +87,22 @@ export const { GET, POST, PUT } = serve({
 
     // Econ Calendar (4 functions)
     econDailyCalendar,
+    econFedSpeakerAlerts,
     econWeeklyPreview,
 
     // Earnings
     earningsDailyCalendar,
     earningsBMOAlert,
     earningsAMCAlert,
+    earningsBMOResults,
+    earningsAMCResults,
     earningsWeeklyPreview,
+
+    // News (1 function)
+    newsScan,
+
+    // Political News (1 function)
+    politicalScan,
 
     // Flow / Sentiment
     flowShortInterest,
@@ -102,9 +110,5 @@ export const { GET, POST, PUT } = serve({
 
     // Maintenance
     newsCleanup,
-    ...(!isWebhookEnabledFor("econ") ? [econFedSpeakerAlerts] : []),
-    ...(!isWebhookEnabledFor("earnings") ? [earningsBMOResults, earningsAMCResults] : []),
-    ...(!isWebhookEnabledFor("news") ? [newsScan] : []),
-    ...(!isWebhookEnabledFor("politics") ? [politicalScan] : []),
   ],
 });
