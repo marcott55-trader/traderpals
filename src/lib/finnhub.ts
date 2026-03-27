@@ -44,6 +44,20 @@ export async function getQuote(symbol: string): Promise<FinnhubQuote> {
   return finnhubFetch<FinnhubQuote>(`/quote?symbol=${encodeURIComponent(symbol)}`);
 }
 
+interface CompanyProfile {
+  ticker?: string;
+  name?: string;
+  exchange?: string;
+}
+
+export async function hasCompanyProfile(symbol: string): Promise<boolean> {
+  const profile = await finnhubFetch<CompanyProfile>(
+    `/stock/profile2?symbol=${encodeURIComponent(symbol)}`
+  );
+
+  return Boolean(profile.ticker || profile.name || profile.exchange);
+}
+
 // ── Futures (via Yahoo Finance fallback) ────────────────────────────
 // Finnhub free tier doesn't reliably support futures symbols.
 // Use Yahoo Finance's chart endpoint as a free, no-auth-needed source.

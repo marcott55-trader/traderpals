@@ -6,7 +6,7 @@
 import type { DiscordEmbed } from "@/types/market";
 import type { EarningsResult } from "@/types/alerts";
 import type { EarningsEvent } from "@/lib/finnhub";
-import { COLORS, formatPrice, formatChange, formatVolume } from "@/lib/embeds";
+import { COLORS } from "@/lib/embeds";
 import { getEasternTimeString, getFormattedDate } from "@/lib/market-hours";
 
 // ── Daily Earnings Calendar ─────────────────────────────────────────

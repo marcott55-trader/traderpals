@@ -211,7 +211,6 @@ async function checkPreEventAlerts(step: any): Promise<void> {
     const today = getEasternDateString();
     const { hour, minute } = getEasternTime();
     const nowMinutes = hour * 60 + minute;
-    const alertWindowMinutes = nowMinutes + 15; // 15 min from now
 
     // Get high-impact events with unsent alerts
     const { data: events } = await supabase

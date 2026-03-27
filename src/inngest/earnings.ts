@@ -11,7 +11,7 @@
  */
 
 import { inngest } from "./client";
-import { getEarningsCalendar, getQuote } from "@/lib/finnhub";
+import { getEarningsCalendar } from "@/lib/finnhub";
 import { postEmbed } from "@/lib/discord";
 import {
   buildDailyEarningsEmbed,

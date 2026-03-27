@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { hasCompanyProfile } from "@/lib/finnhub";
+import {
+  isValidTickerFormat,
+  isValidWatchlistTier,
+  normalizeTicker,
+} from "@/lib/tickers";
 
 /** GET /api/watchlist — return all watchlist rows */
 export async function GET() {
@@ -26,12 +32,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ticker is required" }, { status: 400 });
   }
 
-  const cleanTicker = ticker.trim().toUpperCase();
+  const cleanTicker = normalizeTicker(ticker);
+  const cleanTier = typeof tier === "string" ? tier : "custom";
+
+  if (!isValidTickerFormat(cleanTicker)) {
+    return NextResponse.json({ error: "invalid ticker format" }, { status: 400 });
+  }
+
+  if (!isValidWatchlistTier(cleanTier)) {
+    return NextResponse.json({ error: "invalid tier" }, { status: 400 });
+  }
+
+  if (!(await hasCompanyProfile(cleanTicker))) {
+    return NextResponse.json({ error: `ticker ${cleanTicker} was not recognized` }, { status: 400 });
+  }
 
   const { error } = await supabase
     .from("watchlist")
     .upsert(
-      { ticker: cleanTicker, tier: tier || "custom" },
+      { ticker: cleanTicker, tier: cleanTier },
       { onConflict: "ticker" }
     );
 
@@ -53,14 +72,19 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
+  const cleanTicker = normalizeTicker(ticker);
+  if (!isValidTickerFormat(cleanTicker)) {
+    return NextResponse.json({ error: "invalid ticker format" }, { status: 400 });
+  }
+
   const { error } = await supabase
     .from("watchlist")
     .delete()
-    .eq("ticker", ticker.toUpperCase());
+    .eq("ticker", cleanTicker);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, deleted: ticker.toUpperCase() });
+  return NextResponse.json({ ok: true, deleted: cleanTicker });
 }

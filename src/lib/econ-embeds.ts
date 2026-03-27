@@ -6,7 +6,7 @@
 import type { DiscordEmbed } from "@/types/market";
 import type { EconEventRow } from "@/types/alerts";
 import type { FedEvent } from "@/lib/fed-calendar";
-import { COLORS, formatPrice } from "@/lib/embeds";
+import { COLORS } from "@/lib/embeds";
 import { getEasternTimeString, getFormattedDate } from "@/lib/market-hours";
 
 // ── Daily Calendar ──────────────────────────────────────────────────

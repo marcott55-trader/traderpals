@@ -4,8 +4,6 @@
  * Handles slash commands from Discord:
  *   /alert above NVDA 150
  *   /alert below TSLA 180
- *   /alert ma AAPL 50
- *   /alert vwap TSLA
  *   /alert move NVDA 5
  *   /alerts              — List active alerts
  *   /alert remove 3      — Remove alert by ID
@@ -19,8 +17,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { MAX_ALERTS_PER_USER, VALID_MA_PERIODS } from "@/types/alerts";
+import { MAX_ALERTS_PER_USER } from "@/types/alerts";
 import type { AlertType } from "@/types/alerts";
+import { hasCompanyProfile } from "@/lib/finnhub";
+import { isValidTickerFormat, normalizeTicker } from "@/lib/tickers";
 
 // Discord interaction types
 const INTERACTION_TYPE_PING = 1;
@@ -109,19 +109,27 @@ async function handleAlertCommand(
   switch (subcommand) {
     case "above":
     case "below": {
-      const ticker = String(opts.get("ticker") ?? "").toUpperCase();
+      const ticker = normalizeTicker(String(opts.get("ticker") ?? ""));
       const level = Number(opts.get("level"));
 
-      if (!ticker || isNaN(level) || level <= 0) {
+      if (!ticker || !isValidTickerFormat(ticker) || isNaN(level) || level <= 0) {
         return respond("Usage: /alert above TICKER PRICE");
       }
 
+      if (!(await hasCompanyProfile(ticker))) {
+        return respond(`Ticker **${ticker}** was not recognized. Double-check the symbol and try again.`);
+      }
+
       // Check max alerts per user
-      const { count } = await supabase
+      const { count, error: countError } = await supabase
         .from("price_alerts")
         .select("id", { count: "exact", head: true })
         .eq("discord_user_id", userId)
         .eq("active", true);
+
+      if (countError) {
+        return respond("Failed to check your active alerts. Please try again.");
+      }
 
       if ((count ?? 0) >= MAX_ALERTS_PER_USER) {
         return respond(`You have ${MAX_ALERTS_PER_USER} active alerts (max). Remove some first with \`/alert remove\`.`);
@@ -146,11 +154,15 @@ async function handleAlertCommand(
       return respond("MA cross and VWAP alerts are not yet supported. Coming soon.");
 
     case "move": {
-      const ticker = String(opts.get("ticker") ?? "").toUpperCase();
+      const ticker = normalizeTicker(String(opts.get("ticker") ?? ""));
       const pct = Number(opts.get("percent"));
 
-      if (!ticker || isNaN(pct) || pct <= 0) {
+      if (!ticker || !isValidTickerFormat(ticker) || isNaN(pct) || pct <= 0) {
         return respond("Usage: /alert move TICKER PERCENT");
+      }
+
+      if (!(await hasCompanyProfile(ticker))) {
+        return respond(`Ticker **${ticker}** was not recognized. Double-check the symbol and try again.`);
       }
 
       const { error } = await supabase.from("price_alerts").insert({
@@ -181,29 +193,34 @@ async function handleAlertCommand(
     }
 
     case "clear": {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from("price_alerts")
         .delete({ count: "exact" })
         .eq("discord_user_id", userId)
         .eq("active", true);
 
+      if (error) return respond("Failed to clear alerts. Please try again.");
       return respond(`Cleared **${count ?? 0}** active alert${(count ?? 0) === 1 ? "" : "s"}.`);
     }
 
     default:
-      return respond("Unknown subcommand. Try: above, below, ma, vwap, move, remove, clear");
+      return respond("Unknown subcommand. Try: above, below, move, remove, clear");
   }
 }
 
 async function handleAlertsListCommand(userId: string): Promise<NextResponse> {
   const supabase = getSupabase();
 
-  const { data: alerts } = await supabase
+  const { data: alerts, error } = await supabase
     .from("price_alerts")
     .select("*")
     .eq("discord_user_id", userId)
     .eq("active", true)
     .order("created_at", { ascending: false });
+
+  if (error) {
+    return respond("Failed to load your alerts. Please try again.");
+  }
 
   if (!alerts || alerts.length === 0) {
     return respond("You have no active alerts. Set one with `/alert above TICKER PRICE`.");

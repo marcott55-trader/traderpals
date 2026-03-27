@@ -1,7 +1,7 @@
 /**
  * One-time script to register Discord slash commands.
  *
- * Run with: npx tsx scripts/register-commands.ts
+ * Run with: npm run register-commands
  *
  * Requires env vars:
  *   DISCORD_APP_ID
@@ -31,23 +31,6 @@ const commands = [
         options: [
           { name: "ticker", description: "Stock ticker", type: 3, required: true },
           { name: "level", description: "Price level", type: 10, required: true },
-        ],
-      },
-      {
-        name: "ma",
-        description: "Alert on moving average cross",
-        type: 1,
-        options: [
-          { name: "ticker", description: "Stock ticker", type: 3, required: true },
-          { name: "period", description: "MA period (9, 20, 50, 100, 200)", type: 4, required: true },
-        ],
-      },
-      {
-        name: "vwap",
-        description: "Alert on VWAP cross",
-        type: 1,
-        options: [
-          { name: "ticker", description: "Stock ticker", type: 3, required: true },
         ],
       },
       {
