@@ -132,8 +132,14 @@ async function scanCompanyNews(step: any) {
     const recentHeadlines = await getRecentHeadlines("news");
     let postedCount = 0;
 
-    // Only consider articles from the last 30 minutes (avoid re-posting old news)
-    const thirtyMinAgo = Math.floor(Date.now() / 1000) - 30 * 60;
+    // Read lookback window from config (default 60 min)
+    const { data: cfgRows } = await supabase
+      .from("bot_config")
+      .select("value")
+      .eq("key", "news.lookback_minutes")
+      .limit(1);
+    const lookbackMinutes = parseInt(cfgRows?.[0]?.value ?? "60", 10);
+    const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMinutes * 60;
 
     // Scan each watchlist ticker
     const tickers = Array.from(watchlist.keys());
@@ -155,7 +161,7 @@ async function scanCompanyNews(step: any) {
 
         for (const article of articles) {
           // Skip articles older than 30 minutes
-          if (article.datetime < thirtyMinAgo) continue;
+          if (article.datetime < lookbackCutoff) continue;
 
           // Stop if we've hit the per-cycle cap
           if (postedCount >= NEWS_MAX_PER_CYCLE) break;
@@ -276,10 +282,16 @@ async function scanMacroNews(step: any) {
     let postedCount = 0;
 
     const articles = await getGeneralNews();
-    const thirtyMinAgo = Math.floor(Date.now() / 1000) - 30 * 60;
+    const { data: cfgRows } = await supabase
+      .from("bot_config")
+      .select("value")
+      .eq("key", "news.lookback_minutes")
+      .limit(1);
+    const lookbackMin = parseInt(cfgRows?.[0]?.value ?? "60", 10);
+    const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMin * 60;
 
     for (const article of articles) {
-      if (article.datetime < thirtyMinAgo) continue;
+      if (article.datetime < lookbackCutoff) continue;
       if (postedCount >= NEWS_MAX_PER_CYCLE) break;
 
       const newsId = generateNewsId(article.headline, article.source);

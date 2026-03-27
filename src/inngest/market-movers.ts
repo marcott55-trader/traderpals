@@ -88,7 +88,7 @@ function snapshotToMover(
     ticker: t.ticker,
     price: t.lastTrade?.p ?? t.day?.c ?? 0,
     changePercent: t.todaysChangePerc ?? 0,
-    volume: t.day?.v ?? 0,
+    volume: t.day?.v || t.min?.av || 0, // day.v is 0 pre-market, use min.av
     isWatchlist: watchlist.has(t.ticker),
     tier: watchlist.get(t.ticker) ?? null,
   };
