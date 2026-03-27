@@ -27,8 +27,9 @@ import type { RSSItem } from "@/types/news";
 
 // Politics-specific: max 2 posts per 10-min scan cycle
 const POLITICS_MAX_PER_CYCLE = 2;
-// Politics requires higher score — must have source quality or keyword match
-const POLITICS_SCORE_THRESHOLD = 30;
+// Political news already passes isMarketRelevant() filter before scoring,
+// so a lower threshold is fine — source quality (20) is enough
+const POLITICS_SCORE_THRESHOLD = 10;
 
 // ── Shared helpers ──────────────────────────────────────────────────
 

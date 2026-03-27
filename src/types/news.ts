@@ -54,9 +54,13 @@ export const MARKET_RELEVANT_KEYWORDS = [
   "executive order", "signed into law",
   "antitrust", "sec", "ftc", "doj", "regulation", "ban",
   "china", "taiwan", "russia", "ukraine", "opec", "middle east",
+  "iran", "north korea", "nato",
+  "oil", "crude", "energy",
+  "war", "military", "troops", "missile", "strike", "invasion",
   "tax cut", "tax hike", "corporate tax", "capital gains tax",
   "defense spending", "healthcare bill", "drug pricing",
   "tech regulation", "ai regulation", "crypto regulation",
+  "interest rate", "fed ", "federal reserve", "inflation",
 ] as const;
 
 export const NOISE_KEYWORDS = [
@@ -65,7 +69,7 @@ export const NOISE_KEYWORDS = [
 ] as const;
 
 // Score thresholds
-export const NEWS_SCORE_THRESHOLD = 50;
+export const NEWS_SCORE_THRESHOLD = 40;
 export const NEWS_BREAKING_THRESHOLD = 70;
 
 // Max articles posted per scan cycle (prevents spam)
