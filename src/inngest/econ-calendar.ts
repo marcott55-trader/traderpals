@@ -9,7 +9,7 @@
  */
 
 import { inngest } from "./client";
-import { getEconomicCalendar } from "@/lib/finnhub";
+import { getTodaysReleases, getWeekReleases } from "@/lib/fred";
 import { getFedEventsForDate, getFedEventsForWeek } from "@/lib/fed-calendar";
 import { postEmbed } from "@/lib/discord";
 import {
@@ -45,42 +45,45 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
 async function fetchAndCacheTodaysEvents(): Promise<EconEventRow[]> {
   const today = getEasternDateString();
 
-  // Fetch from both sources in parallel
-  const [finnhubEvents, fedEvents] = await Promise.all([
-    getEconomicCalendar(today, today),
-    getFedEventsForDate(today),
-  ]);
+  // Fetch from FRED + Fed calendar in parallel
+  let fredReleases: Awaited<ReturnType<typeof getTodaysReleases>> = [];
+  let fedEvents: Awaited<ReturnType<typeof getFedEventsForDate>> = [];
+
+  try {
+    [fredReleases, fedEvents] = await Promise.all([
+      getTodaysReleases(today),
+      getFedEventsForDate(today).catch(() => []),
+    ]);
+  } catch {
+    // If FRED fails, try Fed calendar alone
+    fedEvents = await getFedEventsForDate(today).catch(() => []);
+  }
 
   const rows: Omit<EconEventRow, "id" | "created_at">[] = [];
 
-  // Add Finnhub economic events
-  for (const e of finnhubEvents) {
-    if (e.country !== "US") continue; // US events only
-
+  // Add FRED economic releases
+  for (const r of fredReleases) {
     rows.push({
       event_date: today,
-      event_time: e.time || null,
-      event_name: e.event,
-      country: e.country,
-      impact: e.impact,
-      forecast: e.estimate,
-      previous: e.prev,
-      actual: e.actual,
-      is_fed_speech: false,
+      event_time: null, // FRED doesn't provide exact time — most are 8:30 AM ET
+      event_name: r.name,
+      country: "US",
+      impact: r.impact,
+      forecast: null,
+      previous: null,
+      actual: null,
+      is_fed_speech: r.name === "FOMC Statement",
       speaker_name: null,
       is_voting_member: null,
       alert_sent: false,
-      result_posted: e.actual != null,
+      result_posted: false,
     });
   }
 
-  // Merge Fed events (Fed calendar wins for Fed-specific events)
+  // Add Fed calendar events (speeches, testimony, etc.)
   for (const fed of fedEvents) {
-    // Check if already present from Finnhub (by matching event name + date)
     const alreadyExists = rows.some(
-      (r) =>
-        r.event_name.toLowerCase().includes(fed.title.toLowerCase().split(" ")[0]) &&
-        r.event_date === fed.date
+      (r) => r.event_name.toLowerCase().includes(fed.title.toLowerCase().split(" ")[0])
     );
 
     if (!alreadyExists) {
@@ -89,7 +92,7 @@ async function fetchAndCacheTodaysEvents(): Promise<EconEventRow[]> {
         event_time: fed.time,
         event_name: fed.title,
         country: "US",
-        impact: "high", // All Fed events are high-impact
+        impact: "high",
         forecast: null,
         previous: null,
         actual: null,
@@ -109,7 +112,6 @@ async function fetchAndCacheTodaysEvents(): Promise<EconEventRow[]> {
     await supabase.from("econ_events").insert(rows);
   }
 
-  // Return the cached events
   const { data } = await supabase
     .from("econ_events")
     .select("*")
@@ -261,41 +263,9 @@ async function checkResultDrops(step: any): Promise<void> {
 
     if (!events || events.length === 0) return;
 
-    // Fetch fresh data from Finnhub for comparison
-    const freshEvents = await getEconomicCalendar(today, today);
-    const freshByName = new Map(
-      freshEvents.map((e) => [e.event.toLowerCase(), e])
-    );
-
-    for (const event of events as EconEventRow[]) {
-      if (!event.event_time) continue;
-
-      const [h, m] = event.event_time.split(":").map(Number);
-      const eventMinutes = h * 60 + m;
-
-      // Only check events whose time has passed
-      if (eventMinutes > nowMinutes) continue;
-
-      // Look for the actual value in fresh Finnhub data
-      const fresh = freshByName.get(event.event_name.toLowerCase());
-      if (fresh?.actual != null && event.actual == null) {
-        // Update the DB
-        await supabase
-          .from("econ_events")
-          .update({ actual: fresh.actual, result_posted: true })
-          .eq("id", event.id);
-
-        // Post result drop
-        const updatedEvent = { ...event, actual: fresh.actual };
-        const embed = buildResultDropEmbed(updatedEvent);
-        await postEmbed("econ-calendar", embed);
-
-        await logSuccess("result-drop", {
-          event: event.event_name,
-          actual: fresh.actual,
-        });
-      }
-    }
+    // FRED doesn't provide real-time actual values, so result drops
+    // are not available in V1. Skip result checking.
+    // TODO V2: Use BLS API to fetch actual CPI/NFP values after release.
   });
 }
 
@@ -332,39 +302,37 @@ export const econWeeklyPreview = inngest.createFunction(
       return fri.toISOString().split("T")[0];
     });
 
-    // Fetch week's events
+    // Fetch week's events from FRED + Fed calendar
     const [econEvents, fedEvents] = await step.run("fetch-week-events", async () => {
-      const [econ, fed] = await Promise.all([
-        getEconomicCalendar(mondayDate, fridayDate),
-        getFedEventsForWeek(mondayDate),
+      const [fredReleases, fed] = await Promise.all([
+        getWeekReleases(mondayDate, fridayDate).catch(() => []),
+        getFedEventsForWeek(mondayDate).catch(() => []),
       ]);
 
-      // Convert Finnhub events to EconEventRow shape for the embed builder
-      const rows: EconEventRow[] = econ
-        .filter((e) => e.country === "US")
-        .map((e, i) => ({
-          id: i,
-          event_date: mondayDate, // approximate
-          event_time: e.time || null,
-          event_name: e.event,
-          country: e.country,
-          impact: e.impact,
-          forecast: e.estimate,
-          previous: e.prev,
-          actual: e.actual,
-          is_fed_speech: false,
-          speaker_name: null,
-          is_voting_member: null,
-          alert_sent: false,
-          result_posted: false,
-          created_at: new Date().toISOString(),
-        }));
+      // Convert FRED releases to EconEventRow shape for the embed builder
+      const rows: EconEventRow[] = fredReleases.map((r, i) => ({
+        id: i,
+        event_date: r.date,
+        event_time: null,
+        event_name: r.name,
+        country: "US",
+        impact: r.impact,
+        forecast: null,
+        previous: null,
+        actual: null,
+        is_fed_speech: r.name === "FOMC Statement",
+        speaker_name: null,
+        is_voting_member: null,
+        alert_sent: false,
+        result_posted: false,
+        created_at: new Date().toISOString(),
+      }));
 
       return [rows, fed] as const;
     });
 
     await step.run("post-preview", async () => {
-      const embed = buildWeeklyPreviewEmbed(econEvents, fedEvents);
+      const embed = buildWeeklyPreviewEmbed(econEvents, fedEvents.filter(Boolean) as Awaited<ReturnType<typeof getFedEventsForDate>>);
       await postEmbed("econ-calendar", embed);
     });
 

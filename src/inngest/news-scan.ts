@@ -141,10 +141,13 @@ async function scanCompanyNews(step: any) {
     const lookbackMinutes = parseInt(cfgRows?.[0]?.value ?? "60", 10);
     const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMinutes * 60;
 
-    // Scan each watchlist ticker
-    const tickers = Array.from(watchlist.keys());
+    // Only scan 5 tickers per cycle to stay within Vercel's 60s timeout.
+    // Rotate through the watchlist across cycles using a simple offset.
+    const allTickers = Array.from(watchlist.keys());
+    const cycleOffset = Math.floor(Date.now() / (15 * 60 * 1000)) % Math.ceil(allTickers.length / 5);
+    const tickers = allTickers.slice(cycleOffset * 5, cycleOffset * 5 + 5);
 
-    // Process in batches of 5 to respect Finnhub rate limits
+    // Process tickers
     for (let i = 0; i < tickers.length; i += 5) {
       const batch = tickers.slice(i, i + 5);
 
