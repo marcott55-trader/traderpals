@@ -53,15 +53,13 @@ import {
   priceAlertsExtPostEST,
 } from "@/inngest/price-alerts";
 
-// Flow / Sentiment — DISABLED: placeholder logic, no real signal yet.
-// Uncomment when options/Reddit data sources are implemented.
-// import {
-//   flowShortInterest,
-//   flowOptionsScanEDT,
-//   flowOptionsScanEST,
-//   flowRedditScan,
-//   flowWeeklySqueezeWatch,
-// } from "@/inngest/flow-scan";
+// Flow / Sentiment — short interest (FINRA) + Reddit scan
+// Options flow scan remains disabled until Polygon Starter is confirmed
+import {
+  flowShortInterest,
+  flowRedditScan,
+  flowWeeklySqueezeWatch,
+} from "@/inngest/flow-scan";
 
 // News cleanup
 import { newsCleanup } from "@/inngest/news-cleanup";

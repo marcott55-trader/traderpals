@@ -82,7 +82,7 @@ export function buildPremarketEmbed(
     });
   }
 
-  const label = isUpdate ? "WATCHLIST UPDATE" : "WATCHLIST PRE-MARKET";
+  const label = isUpdate ? "PRE-MARKET UPDATE" : "PRE-MARKET MOVERS";
   return {
     title: `📊 ${label} — ${getFormattedDate()}`,
     color: COLORS.BLUE,

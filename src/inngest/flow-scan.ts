@@ -1,32 +1,30 @@
 /**
  * Flow / Sentiment Module — #flow
  *
- * V1 (free data only):
- *   Every 15 min (9AM-4PM, weekdays)  — Options volume scan (placeholder)
- *   Every 30 min (24/7)               — Reddit sentiment scan (placeholder)
- *   6:00 PM ET (weekdays)             — Daily short interest summary
- *   7:00 AM ET (weekdays)             — Dark pool summary (placeholder)
- *   8:00 PM ET Sunday                 — Weekly short squeeze watchlist
+ * V1 (free data):
+ *   6:00 PM ET (weekdays)   — Daily short volume from FINRA
+ *   Every 30 min (24/7)     — Reddit sentiment scan
+ *   Sunday 8:00 PM ET       — Weekly short squeeze watchlist
  *
- * Note: Options flow and Reddit sentiment require external data that may be
- * limited in free tiers. These functions are scaffolded for V1 and will be
- * enhanced in V2 with paid data sources.
+ * V2 (paid, not yet implemented):
+ *   Options flow via Polygon Starter
+ *   Dark pool prints via Unusual Whales
  */
 
 import { inngest } from "./client";
-import { getQuote } from "@/lib/finnhub";
-import { postEmbed, logToDiscord } from "@/lib/discord";
-import { buildShortInterestEmbed } from "@/lib/alerts-embeds";
+import { postEmbed } from "@/lib/discord";
 import { supabase } from "@/lib/supabase";
+import { fetchShortVolume } from "@/lib/finra";
+import { scanRedditMentions, saveRedditMentionLog } from "@/lib/reddit";
 import {
   isMarketDay,
   isNearETTime,
-  isEDT,
-  getEasternTime,
   etCronPair,
-  etIntervalCronPair,
+  getFormattedDate,
 } from "@/lib/market-hours";
-import type { ShortInterestData } from "@/types/alerts";
+import { COLORS, formatVolume } from "@/lib/embeds";
+import type { DiscordEmbed } from "@/types/market";
+import type { RedditMention } from "@/types/alerts";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -43,8 +41,7 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
   });
 }
 
-// ── 6:00 PM ET — Daily Short Interest Summary ──────────────────────
-// Uses Finnhub short interest data (updated bi-monthly by FINRA)
+// ── 6:00 PM ET — Daily Short Volume (FINRA) ─────────────────────────
 
 const [si6pmEDT, si6pmEST] = etCronPair(18, 0);
 
@@ -61,110 +58,108 @@ export const flowShortInterest = inngest.createFunction(
     });
     if (!shouldRun) return { skipped: true };
 
-    const shortData: ShortInterestData[] = await step.run("fetch-short-interest", async () => {
+    const posted = await step.run("fetch-and-post", async () => {
       const tickers = await getWatchlistTickers();
-      const results: ShortInterestData[] = [];
+      const shortData = await fetchShortVolume(tickers);
 
-      // Finnhub free tier doesn't have a direct short interest endpoint.
-      // For V1, we use placeholder data structure — in V2 this would
-      // call Finnhub premium or FINRA CSV files.
-      //
-      // For now, log that this is a V2 feature and skip.
-      await logToDiscord("flow", "Short interest scan — V1 placeholder. Upgrade to V2 for real data.");
+      if (shortData.length === 0) return false;
 
-      return results;
-    });
+      // Only show tickers with notable short volume (> 30%)
+      const notable = shortData.filter((d) => d.shortPercent > 30);
+      if (notable.length === 0) return false;
 
-    if (shortData.length > 0) {
-      await step.run("post-summary", async () => {
-        const embed = buildShortInterestEmbed(shortData);
-        await postEmbed("flow", embed);
+      const lines = notable.slice(0, 15).map((d, i) => {
+        const pct = d.shortPercent.toFixed(1);
+        const emoji = d.shortPercent > 50 ? "🔴" : d.shortPercent > 40 ? "🟡" : "🟢";
+        return `${i + 1}. ${emoji} **${d.ticker}**  ${pct}% short  Vol: ${formatVolume(d.totalVolume)}`;
       });
-    }
+
+      const embed: DiscordEmbed = {
+        title: `📉 SHORT VOLUME — ${getFormattedDate()}`,
+        color: COLORS.PURPLE,
+        fields: [{
+          name: "Watchlist Short Volume (FINRA)",
+          value: lines.join("\n"),
+        }],
+        footer: { text: "FINRA RegSHO • Previous trading day" },
+      };
+
+      await postEmbed("flow", embed);
+      return true;
+    });
 
     await step.run("log", async () => {
-      await logSuccess("short-interest", { count: shortData.length });
+      await logSuccess("short-volume", { posted });
     });
 
-    return { posted: shortData.length > 0, count: shortData.length };
+    return { posted };
   }
 );
 
-// ── Every 15 min (9AM-4PM) — Options Volume Scan (V1 Placeholder) ──
-
-const [optionsEDT, optionsEST] = etIntervalCronPair(15, 9, 16);
-
-export const flowOptionsScanEDT = inngest.createFunction(
-  {
-    id: "flow-options-scan-edt",
-    retries: 1,
-    triggers: [{ cron: optionsEDT }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || !isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 9 && hour <= 16;
-    });
-    if (!shouldRun) return { skipped: true };
-
-    // V1: Options volume data requires Yahoo Finance options chains or
-    // a paid provider. Scaffold the function for V2 integration.
-    await step.run("options-scan-v1", async () => {
-      // TODO V2: Fetch options chains via yfinance or Polygon Starter ($29/mo)
-      // For each watchlist ticker:
-      // 1. Fetch options chain for nearest expiry
-      // 2. Calculate total call volume vs put volume
-      // 3. Compare volume to open interest
-      // 4. Flag unusual activity (volume > 3x OI)
-    });
-
-    return { skipped: true, reason: "V1 placeholder — options data not yet integrated" };
-  }
-);
-
-export const flowOptionsScanEST = inngest.createFunction(
-  {
-    id: "flow-options-scan-est",
-    retries: 1,
-    triggers: [{ cron: optionsEST }],
-  },
-  async ({ step }) => {
-    const shouldRun: boolean = await step.run("check-schedule", async () => {
-      if (!isMarketDay() || isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 9 && hour <= 16;
-    });
-    if (!shouldRun) return { skipped: true };
-    return { skipped: true, reason: "V1 placeholder" };
-  }
-);
-
-// ── Every 30 min — Reddit Sentiment Scan (V1 Placeholder) ──────────
+// ── Every 30 min — Reddit Sentiment Scan ────────────────────────────
 
 export const flowRedditScan = inngest.createFunction(
   {
     id: "flow-reddit-scan",
     retries: 1,
-    triggers: [{ cron: "*/30 * * * *" }], // Every 30 min, 24/7
+    triggers: [{ cron: "*/30 * * * *" }],
   },
   async ({ step }) => {
-    // V1: Reddit API requires OAuth app registration.
-    // Scaffold for V2 integration.
-    await step.run("reddit-scan-v1", async () => {
-      // TODO V2: Implement Reddit API client
-      // 1. Fetch hot posts from r/wallstreetbets, r/stocks
-      // 2. Extract ticker mentions from titles and top comments
-      // 3. Filter false positives (common words matching tickers)
-      // 4. Compare to 7-day rolling average
-      // 5. Alert on 3x spike
+    // Skip if Reddit credentials aren't configured
+    const hasCredentials: boolean = await step.run("check-credentials", async () => {
+      return Boolean(process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET);
+    });
+    if (!hasCredentials) return { skipped: true, reason: "Reddit credentials not configured" };
+
+    const result = await step.run("scan-reddit", async () => {
+      const tickers = await getWatchlistTickers();
+      const mentions = await scanRedditMentions(tickers);
+
+      // Save raw counts for 7-day average calculation
+      const mentionMap = new Map<string, number>();
+      for (const m of mentions) {
+        mentionMap.set(m.ticker, m.mentions24h);
+      }
+      await saveRedditMentionLog(mentionMap);
+
+      // Only post spikes (3x+ above 7-day average, minimum 10 mentions)
+      const spikes = mentions.filter(
+        (m) => m.spikeMultiple >= 3 && m.mentions24h >= 10
+      );
+
+      if (spikes.length === 0) return { posted: 0, scanned: mentions.length };
+
+      const lines = spikes.slice(0, 10).map((m) => formatRedditLine(m));
+
+      const embed: DiscordEmbed = {
+        title: "📱 REDDIT BUZZ — Watchlist Spikes",
+        color: COLORS.PURPLE,
+        fields: [{
+          name: "Unusual Mention Activity (24h)",
+          value: lines.join("\n"),
+        }],
+        footer: { text: "Reddit r/wallstreetbets + r/stocks + r/options" },
+      };
+
+      await postEmbed("flow", embed);
+      return { posted: spikes.length, scanned: mentions.length };
     });
 
-    return { skipped: true, reason: "V1 placeholder — Reddit API not yet integrated" };
+    await step.run("log", async () => {
+      await logSuccess("reddit-scan", result);
+    });
+
+    return result;
   }
 );
 
-// ── Sunday 8 PM ET — Weekly Short Squeeze Watchlist (V1 Placeholder) ─
+function formatRedditLine(m: RedditMention): string {
+  const spike = m.spikeMultiple.toFixed(1);
+  const emoji = m.spikeMultiple >= 5 ? "🔥" : "📈";
+  return `${emoji} **${m.ticker}**  ${m.mentions24h} mentions (${spike}x avg)`;
+}
+
+// ── Sunday 8 PM ET — Weekly Short Squeeze Watchlist ─────────────────
 
 const [weeklySIEDT, weeklySIEST] = etCronPair(20, 0, "0");
 
@@ -180,7 +175,36 @@ export const flowWeeklySqueezeWatch = inngest.createFunction(
     });
     if (!shouldRun) return { skipped: true };
 
-    // V1 placeholder — same as short interest but weekly
-    return { skipped: true, reason: "V1 placeholder" };
+    const posted = await step.run("build-squeeze-list", async () => {
+      const tickers = await getWatchlistTickers();
+      const shortData = await fetchShortVolume(tickers);
+
+      // Squeeze candidates: high short volume (> 40%)
+      const candidates = shortData.filter((d) => d.shortPercent > 40);
+      if (candidates.length === 0) return false;
+
+      const lines = candidates.slice(0, 10).map((d, i) => {
+        return `${i + 1}. **${d.ticker}**  ${d.shortPercent.toFixed(1)}% short  Vol: ${formatVolume(d.totalVolume)}`;
+      });
+
+      const embed: DiscordEmbed = {
+        title: "🎯 WEEKLY SQUEEZE WATCHLIST",
+        color: COLORS.PURPLE,
+        fields: [{
+          name: "High Short Volume Tickers",
+          value: lines.join("\n"),
+        }],
+        footer: { text: "FINRA short volume • Watch for short covering rallies" },
+      };
+
+      await postEmbed("flow", embed);
+      return true;
+    });
+
+    await step.run("log", async () => {
+      await logSuccess("weekly-squeeze", { posted });
+    });
+
+    return { posted };
   }
 );

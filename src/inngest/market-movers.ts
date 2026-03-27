@@ -1,5 +1,6 @@
 import { inngest } from "./client";
-import { getQuote, getFuturesQuotes } from "@/lib/finnhub";
+import { getTopGainers, getTopLosers } from "@/lib/polygon";
+import { getFuturesQuotes } from "@/lib/finnhub";
 import { postEmbed } from "@/lib/discord";
 import {
   buildPremarketEmbed,
@@ -17,7 +18,7 @@ import {
   etCronPair,
   etIntervalCronPair,
 } from "@/lib/market-hours";
-import type { MarketMover, FuturesQuote } from "@/types/market";
+import type { MarketMover, FuturesQuote, PolygonSnapshotTicker } from "@/types/market";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -78,47 +79,37 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
   });
 }
 
-/** Fetch Finnhub quotes for all watchlist tickers and split into gainers/losers */
-async function fetchMoversFromWatchlist(
-  tickers: string[],
+function snapshotToMover(
+  t: PolygonSnapshotTicker,
+  watchlist: Map<string, string>
+): MarketMover {
+  return {
+    ticker: t.ticker,
+    price: t.lastTrade?.p ?? t.day?.c ?? 0,
+    changePercent: t.todaysChangePerc ?? 0,
+    volume: t.day?.v ?? 0,
+    isWatchlist: watchlist.has(t.ticker),
+    tier: watchlist.get(t.ticker) ?? null,
+  };
+}
+
+/** Fetch broad market movers from Polygon (real gainers/losers, not just watchlist) */
+async function fetchMarketMovers(
   watchlist: Map<string, string>,
   config: MoversConfig
 ): Promise<{ gainers: MarketMover[]; losers: MarketMover[] }> {
-  const movers: MarketMover[] = [];
+  const [rawGainers, rawLosers] = await Promise.all([
+    getTopGainers(),
+    getTopLosers(),
+  ]);
 
-  // Fetch quotes in parallel (batches of 10 to respect rate limits)
-  const batchSize = 10;
-  for (let i = 0; i < tickers.length; i += batchSize) {
-    const batch = tickers.slice(i, i + batchSize);
-    const quotes = await Promise.allSettled(
-      batch.map(async (ticker) => {
-        const q = await getQuote(ticker);
-        return { ticker, quote: q };
-      })
-    );
-
-    for (const result of quotes) {
-      if (result.status === "rejected") continue;
-      const { ticker, quote } = result.value;
-      if (!quote.c || quote.c === 0) continue;
-
-      movers.push({
-        ticker,
-        price: quote.c,
-        changePercent: quote.dp ?? 0,
-        volume: 0, // Finnhub quote doesn't include volume
-        isWatchlist: watchlist.has(ticker),
-        tier: watchlist.get(ticker) ?? null,
-      });
-    }
-
-    if (i + batchSize < tickers.length) {
-      await new Promise((r) => setTimeout(r, 500));
-    }
-  }
+  const allMovers = [
+    ...rawGainers.map((t) => snapshotToMover(t, watchlist)),
+    ...rawLosers.map((t) => snapshotToMover(t, watchlist)),
+  ];
 
   // Apply configurable filters
-  const filtered = movers.filter((m) => {
+  const filtered = allMovers.filter((m) => {
     if (m.price < config.minPrice) return false;
     if (Math.abs(m.changePercent) < config.minChangePct) return false;
     if (config.minVolume > 0 && m.volume < config.minVolume) return false;
@@ -165,12 +156,11 @@ async function fetchAndPostMovers(
     return getMoversConfig();
   });
 
-  // Fetch quotes for all watchlist tickers via Finnhub
+  // Fetch broad market movers from Polygon (real gainers/losers)
   const { gainers, losers } = await step.run(
     "fetch-movers",
     async () => {
-      const tickers = Array.from(watchlistMap.keys());
-      return fetchMoversFromWatchlist(tickers, watchlistMap, config);
+      return fetchMarketMovers(watchlistMap, config);
     }
   );
 
