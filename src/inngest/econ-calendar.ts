@@ -11,9 +11,11 @@ import { inngest } from "./client";
 import type { GetStepTools } from "inngest";
 import { getTodaysReleases, getWeekReleases } from "@/lib/fred";
 import { getFedEventsForDate, getFedEventsForWeek } from "@/lib/fed-calendar";
+import { getEconomicCalendar } from "@/lib/finnhub";
 import { postEmbed } from "@/lib/discord";
 import {
   buildDailyEconCalendarEmbed,
+  buildResultDropEmbed,
   buildWeeklyPreviewEmbed,
 } from "@/lib/econ-embeds";
 import { supabase } from "@/lib/supabase";
@@ -57,6 +59,63 @@ function inferReleaseTime(name: string): string | null {
   };
 
   return releaseTimes[normalized] ?? null;
+}
+
+function timeToMinutes(value: string | null): number | null {
+  if (!value) return null;
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function normalizeEventName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\(.*?\)/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getFinnhubNameCandidates(name: string): string[] {
+  const normalized = normalizeEventName(name);
+
+  const aliases: Record<string, string[]> = {
+    "cpi": ["cpi", "consumer price index"],
+    "ppi": ["ppi", "producer price index"],
+    "jobs report": ["nonfarm payrolls", "payrolls", "jobs report", "nfp"],
+    "gdp": ["gross domestic product", "gdp"],
+    "jobless claims": ["jobless claims", "initial jobless claims", "unemployment claims"],
+    "adp employment": ["adp employment", "adp nonfarm employment", "adp"],
+    "pce inflation": ["pce", "personal consumption expenditures", "core pce"],
+    "employment cost index": ["employment cost index", "eci"],
+    "retail sales": ["retail sales"],
+    "building permits": ["building permits"],
+    "housing vacancies": ["housing vacancies"],
+    "fomc statement": ["fomc", "interest rate decision", "fed interest rate decision"],
+  };
+
+  for (const [key, values] of Object.entries(aliases)) {
+    if (normalized.includes(key)) return values;
+  }
+
+  return [normalized];
+}
+
+function findEconomicCalendarMatch(
+  eventName: string,
+  calendarEvents: Awaited<ReturnType<typeof getEconomicCalendar>>
+) {
+  const candidates = getFinnhubNameCandidates(eventName);
+  const eventNameNormalized = normalizeEventName(eventName);
+
+  return calendarEvents.find((event) => {
+    const finnhubName = normalizeEventName(event.event);
+    return candidates.some(
+      (candidate) =>
+        finnhubName.includes(candidate) ||
+        candidate.includes(finnhubName) ||
+        finnhubName.includes(eventNameNormalized)
+    );
+  });
 }
 
 /**
@@ -138,7 +197,33 @@ async function fetchAndCacheTodaysEvents(): Promise<EconEventRow[]> {
     .eq("event_date", today)
     .order("event_time", { ascending: true, nullsFirst: false });
 
-  return (data ?? []) as EconEventRow[];
+  const rowsFromDb = (data ?? []) as EconEventRow[];
+
+  try {
+    const econCalendar = await getEconomicCalendar(today, today);
+
+    for (const row of rowsFromDb) {
+      const match = findEconomicCalendarMatch(row.event_name, econCalendar);
+      if (!match) continue;
+
+      await supabase
+        .from("econ_events")
+        .update({
+          forecast: match.estimate,
+          previous: match.prev,
+          actual: match.actual,
+        })
+        .eq("id", row.id);
+
+      row.forecast = match.estimate;
+      row.previous = match.prev;
+      row.actual = match.actual;
+    }
+  } catch {
+    // Finnhub economic calendar is best-effort; daily schedule should still post.
+  }
+
+  return rowsFromDb;
 }
 
 // ── 5:00 AM ET — Daily Calendar Post ────────────────────────────────
@@ -229,8 +314,9 @@ async function checkResultDrops(
 ): Promise<{ resultCandidates: number; resultsPosted: number }> {
   return step.run("check-results", async () => {
     const today = getEasternDateString();
+    const econCalendar = await getEconomicCalendar(today, today).catch(() => []);
 
-    // Get events where actual is still null and event time has passed
+    // Get today's timed events that have not been posted yet.
     const { data: events } = await supabase
       .from("econ_events")
       .select("*")
@@ -242,10 +328,48 @@ async function checkResultDrops(
       return { resultCandidates: 0, resultsPosted: 0 };
     }
 
-    // FRED doesn't provide real-time actual values, so result drops
-    // are not available in V1. Skip result checking.
-    // TODO V2: Use BLS API to fetch actual CPI/NFP values after release.
-    return { resultCandidates: events.length, resultsPosted: 0 };
+    let resultsPosted = 0;
+    const { hour, minute } = getEasternTime();
+    const nowMinutes = hour * 60 + minute;
+
+    for (const event of events as EconEventRow[]) {
+      const eventMinutes = timeToMinutes(event.event_time);
+
+      if (eventMinutes != null && eventMinutes > nowMinutes + 2) continue;
+
+      const match = findEconomicCalendarMatch(event.event_name, econCalendar);
+      if (!match || !match.actual) continue;
+
+      const updatedEvent: EconEventRow = {
+        ...event,
+        forecast: match.estimate,
+        previous: match.prev,
+        actual: match.actual,
+        result_posted: true,
+      };
+
+      await postEmbed("econ-calendar", buildResultDropEmbed(updatedEvent));
+
+      await supabase
+        .from("econ_events")
+        .update({
+          forecast: match.estimate,
+          previous: match.prev,
+          actual: match.actual,
+          result_posted: true,
+        })
+        .eq("id", event.id);
+
+      await logSuccess("result-drop", {
+        event: event.event_name,
+        actual: match.actual,
+        forecast: match.estimate,
+      });
+
+      resultsPosted += 1;
+    }
+
+    return { resultCandidates: events.length, resultsPosted };
   });
 }
 

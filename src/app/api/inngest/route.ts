@@ -11,6 +11,18 @@ import {
   marketCloseMovers,
   afterHoursMovers,
 } from "@/inngest/market-movers";
+import {
+  marketMapPremarket,
+  marketMapOpen,
+  marketMapMidday,
+  marketMapClose,
+} from "@/inngest/market-map";
+import {
+  sectorBreadthPremarket,
+  sectorBreadthOpen,
+  sectorBreadthMidday,
+  sectorBreadthClose,
+} from "@/inngest/sector-breadth";
 
 // Econ Calendar
 import {
@@ -75,6 +87,14 @@ export const { GET, POST, PUT } = serve({
     intradayMoversEST,
     marketCloseMovers,
     afterHoursMovers,
+    marketMapPremarket,
+    marketMapOpen,
+    marketMapMidday,
+    marketMapClose,
+    sectorBreadthPremarket,
+    sectorBreadthOpen,
+    sectorBreadthMidday,
+    sectorBreadthClose,
 
     // Econ Calendar (4 functions)
     econDailyCalendar,
