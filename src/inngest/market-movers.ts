@@ -170,7 +170,19 @@ async function fetchAndPostMovers(
   let lowFloatLosers: LowFloatMover[] = [];
   if (embedType === "premarket" || embedType === "premarket-update" || embedType === "after-hours") {
     const lowFloat = await step.run("fetch-low-float", async () => {
-      return getLowFloatMovers();
+      // Read configurable float/volume thresholds from Supabase
+      const { data: lfConfig } = await supabase
+        .from("bot_config")
+        .select("key, value")
+        .like("key", "lowfloat.%");
+      const lf: Record<string, string> = {};
+      for (const row of lfConfig ?? []) lf[row.key] = row.value;
+
+      const minFloat = parseInt(lf["lowfloat.min_float"] ?? "100000", 10);
+      const maxFloat = parseInt(lf["lowfloat.max_float"] ?? "20000000", 10);
+      const minVol = parseInt(lf["lowfloat.min_volume"] ?? "100000", 10);
+
+      return getLowFloatMovers(minFloat, maxFloat, minVol);
     });
     lowFloatGainers = lowFloat.gainers;
     lowFloatLosers = lowFloat.losers;

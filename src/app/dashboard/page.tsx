@@ -28,6 +28,9 @@ const DEFAULTS: ConfigMap = {
   "news.lookback_minutes": "60",
   "politics.score_threshold": "15",
   "politics.max_per_cycle": "2",
+  "lowfloat.min_float": "100000",
+  "lowfloat.max_float": "20000000",
+  "lowfloat.min_volume": "100000",
   "flow.min_short_pct": "25",
   "flow.reddit_spike_threshold": "3",
   "flow.reddit_min_mentions": "10",
@@ -341,6 +344,43 @@ export default function DashboardPage() {
               label="Min Volume"
               value={parseFloat(cfg(config, "movers.min_volume"))}
               onChange={(v) => set("movers.min_volume", v)}
+            />
+          </Section>
+        </div>
+
+        {/* ── Low Float Scanner ──────────────────────────── */}
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Low Float Scanner
+            </h2>
+            <StatusBadge status={sectionStatus["lowfloat"] ?? "idle"} />
+          </div>
+          <Section
+            title="Low Float Scanner"
+            saving={sectionStatus["lowfloat"] === "loading"}
+            onSave={() =>
+              saveKeys("lowfloat", [
+                "lowfloat.min_float",
+                "lowfloat.max_float",
+                "lowfloat.min_volume",
+              ])
+            }
+          >
+            <NumberInput
+              label="Min Float (shares)"
+              value={parseFloat(cfg(config, "lowfloat.min_float"))}
+              onChange={(v) => set("lowfloat.min_float", v)}
+            />
+            <NumberInput
+              label="Max Float (shares)"
+              value={parseFloat(cfg(config, "lowfloat.max_float"))}
+              onChange={(v) => set("lowfloat.max_float", v)}
+            />
+            <NumberInput
+              label="Min Volume"
+              value={parseFloat(cfg(config, "lowfloat.min_volume"))}
+              onChange={(v) => set("lowfloat.min_volume", v)}
             />
           </Section>
         </div>
