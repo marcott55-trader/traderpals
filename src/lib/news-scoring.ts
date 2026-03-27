@@ -14,11 +14,11 @@ import {
 // ── Source scores ───────────────────────────────────────────────────
 
 const TIER_1_SOURCES = new Set([
-  "reuters", "bloomberg", "wsj", "wall street journal", "cnbc",
+  "reuters", "bloomberg", "wsj", "wall street journal", "cnbc", "associated press", "ap news",
 ]);
 
 const TIER_2_SOURCES = new Set([
-  "marketwatch", "barrons", "barron's", "financial times", "ft",
+  "marketwatch", "barrons", "barron's", "financial times", "ft", "benzinga", "investing.com", "yahoo", "yahoo finance",
 ]);
 
 // ── Keyword → tag mapping ───────────────────────────────────────────
@@ -43,6 +43,8 @@ const TAG_KEYWORDS: Record<NewsTag, string[]> = {
 const HIGH_VALUE_KEYWORDS = new Set([
   "earnings", "fda", "acquisition", "fomc", "merger",
   "buyout", "approval", "indictment", "bankruptcy",
+  "guidance", "downgrade", "upgrade", "price target",
+  "sec", "lawsuit", "tariff", "sanctions", "partnership", "contract",
 ]);
 
 // ── Scoring ─────────────────────────────────────────────────────────

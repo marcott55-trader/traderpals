@@ -8,7 +8,7 @@
 
 import { inngest } from "./client";
 import { getCompanyNews, getGeneralNews } from "@/lib/finnhub";
-import { postEmbed } from "@/lib/discord";
+import { logToDiscord, postEmbed } from "@/lib/discord";
 import { buildNewsEmbed } from "@/lib/news-embeds";
 import {
   scoreHeadline,
@@ -86,6 +86,44 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
   });
 }
 
+async function logScanSummary(
+  action: "company-scan" | "macro-scan",
+  summary: Record<string, unknown>
+) {
+  await logSuccess(action, summary);
+
+  const posted = typeof summary.posted === "number" ? summary.posted : 0;
+  if (posted === 0) {
+    const details = Object.entries(summary)
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .join(" ");
+    await logToDiscord("news", `${action} produced no posts: ${details}`);
+  }
+}
+
+function getPreviousEasternDateString(): string {
+  const now = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+  );
+  now.setDate(now.getDate() - 1);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getEffectiveLookbackMinutes(defaultMinutes: number): number {
+  const { hour, minute } = getEasternTime();
+  const minutesSinceMidnight = hour * 60 + minute;
+
+  // During premarket, include the full overnight session from the prior close.
+  if (minutesSinceMidnight < 570) {
+    return Math.max(defaultMinutes, 18 * 60);
+  }
+
+  return defaultMinutes;
+}
+
 function getPrioritizedTickersForCycle(watchlist: Map<string, string>): string[] {
   const entries = Array.from(watchlist.entries()).sort((a, b) => {
     const priority = { tier1: 0, tier2: 1, futures: 2, custom: 3 };
@@ -156,11 +194,15 @@ export const newsCompanyScanEST = inngest.createFunction(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function scanCompanyNews(step: any) {
-  const posted = await step.run("scan-company-news", async () => {
+  const summary = await step.run("scan-company-news", async () => {
     const watchlist = await getWatchlistMap();
     const today = getEasternDateString();
+    const previousDate = getPreviousEasternDateString();
     const recentHeadlines = await getRecentHeadlines("news");
     let postedCount = 0;
+    let scannedCount = 0;
+    let scoreRejected = 0;
+    let dedupRejected = 0;
 
     // Read lookback window from config (default 60 min)
     const { data: cfgRows } = await supabase
@@ -168,7 +210,8 @@ async function scanCompanyNews(step: any) {
       .select("value")
       .eq("key", "news.lookback_minutes")
       .limit(1);
-    const lookbackMinutes = parseInt(cfgRows?.[0]?.value ?? "60", 10);
+    const configuredLookback = parseInt(cfgRows?.[0]?.value ?? "60", 10);
+    const lookbackMinutes = getEffectiveLookbackMinutes(configuredLookback);
     const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMinutes * 60;
 
     // Always cover core tier1 names, then rotate the rest.
@@ -179,7 +222,7 @@ async function scanCompanyNews(step: any) {
       const batch = tickers.slice(i, i + 4);
 
       const newsResults = await Promise.allSettled(
-        batch.map((ticker) => getCompanyNews(ticker, today, today))
+        batch.map((ticker) => getCompanyNews(ticker, previousDate, today))
       );
 
       for (let j = 0; j < batch.length; j++) {
@@ -190,6 +233,8 @@ async function scanCompanyNews(step: any) {
         const articles = result.value;
 
         for (const article of articles) {
+          scannedCount++;
+
           // Skip articles older than 30 minutes
           if (article.datetime < lookbackCutoff) continue;
 
@@ -199,14 +244,23 @@ async function scanCompanyNews(step: any) {
           const newsId = generateNewsId(article.headline, article.source);
 
           // Dedup: exact hash
-          if (await isAlreadyPosted(newsId)) continue;
+          if (await isAlreadyPosted(newsId)) {
+            dedupRejected++;
+            continue;
+          }
 
           // Dedup: fuzzy match against recent posts
-          if (recentHeadlines.some((h) => isFuzzyDuplicate(h, article.headline))) continue;
+          if (recentHeadlines.some((h) => isFuzzyDuplicate(h, article.headline))) {
+            dedupRejected++;
+            continue;
+          }
 
           // Story-level dedup: same event cluster already posted in last 4 hours?
           const clusterId = buildClusterId(article.headline);
-          if (await isStoryAlreadyPosted(clusterId, "news")) continue;
+          if (await isStoryAlreadyPosted(clusterId, "news")) {
+            dedupRejected++;
+            continue;
+          }
 
           // Score
           const relatedTickers = [ticker];
@@ -221,7 +275,10 @@ async function scanCompanyNews(step: any) {
             relatedTickers
           );
 
-          if (shouldReject || !shouldPost(score)) continue;
+          if (shouldReject || !shouldPost(score)) {
+            scoreRejected++;
+            continue;
+          }
 
           const scored: ScoredArticle = {
             headline: article.headline,
@@ -256,14 +313,20 @@ async function scanCompanyNews(step: any) {
       }
     }
 
-    return postedCount;
+    return {
+      posted: postedCount,
+      scanned: scannedCount,
+      dedupRejected,
+      scoreRejected,
+      lookbackMinutes,
+    };
   });
 
   await step.run("log", async () => {
-    await logSuccess("company-scan", { posted });
+    await logScanSummary("company-scan", summary);
   });
 
-  return { posted };
+  return summary;
 }
 
 // ── Every 10 min (5AM-8PM) — Macro/General News ────────────────────
@@ -306,10 +369,13 @@ export const newsMacroScanEST = inngest.createFunction(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function scanMacroNews(step: any) {
-  const posted = await step.run("scan-macro-news", async () => {
+  const summary = await step.run("scan-macro-news", async () => {
     const watchlist = await getWatchlistMap();
     const recentHeadlines = await getRecentHeadlines("news");
     let postedCount = 0;
+    let scannedCount = 0;
+    let scoreRejected = 0;
+    let dedupRejected = 0;
 
     const articles = await getGeneralNews();
     const { data: cfgRows } = await supabase
@@ -317,20 +383,31 @@ async function scanMacroNews(step: any) {
       .select("value")
       .eq("key", "news.lookback_minutes")
       .limit(1);
-    const lookbackMin = parseInt(cfgRows?.[0]?.value ?? "60", 10);
+    const configuredLookback = parseInt(cfgRows?.[0]?.value ?? "60", 10);
+    const lookbackMin = getEffectiveLookbackMinutes(configuredLookback);
     const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMin * 60;
 
     for (const article of articles) {
+      scannedCount++;
       if (article.datetime < lookbackCutoff) continue;
       if (postedCount >= NEWS_MAX_PER_CYCLE) break;
 
       const newsId = generateNewsId(article.headline, article.source);
-      if (await isAlreadyPosted(newsId)) continue;
-      if (recentHeadlines.some((h) => isFuzzyDuplicate(h, article.headline))) continue;
+      if (await isAlreadyPosted(newsId)) {
+        dedupRejected++;
+        continue;
+      }
+      if (recentHeadlines.some((h) => isFuzzyDuplicate(h, article.headline))) {
+        dedupRejected++;
+        continue;
+      }
 
       // Story-level dedup
       const clusterId = buildClusterId(article.headline);
-      if (await isStoryAlreadyPosted(clusterId, "news")) continue;
+      if (await isStoryAlreadyPosted(clusterId, "news")) {
+        dedupRejected++;
+        continue;
+      }
 
       // Extract related tickers from the related field
       const relatedTickers = article.related
@@ -344,7 +421,10 @@ async function scanMacroNews(step: any) {
         relatedTickers
       );
 
-      if (shouldReject || !shouldPost(score)) continue;
+      if (shouldReject || !shouldPost(score)) {
+        scoreRejected++;
+        continue;
+      }
 
       const scored: ScoredArticle = {
         headline: article.headline,
@@ -367,12 +447,18 @@ async function scanMacroNews(step: any) {
       postedCount++;
     }
 
-    return postedCount;
+    return {
+      posted: postedCount,
+      scanned: scannedCount,
+      dedupRejected,
+      scoreRejected,
+      lookbackMinutes: lookbackMin,
+    };
   });
 
   await step.run("log", async () => {
-    await logSuccess("macro-scan", { posted });
+    await logScanSummary("macro-scan", summary);
   });
 
-  return { posted };
+  return summary;
 }
