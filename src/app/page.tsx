@@ -17,6 +17,15 @@ export default function Home() {
           </p>
         </div>
         <div className="border rounded-lg p-4">
+          <h2 className="font-semibold text-gray-700 mb-1">Dashboard</h2>
+          <p>
+            <a href="/dashboard" className="text-blue-600 underline">
+              Open Dashboard
+            </a>{" "}
+            to configure bot settings &amp; manage watchlist.
+          </p>
+        </div>
+        <div className="border rounded-lg p-4">
           <h2 className="font-semibold text-gray-700 mb-1">Active Modules</h2>
           <ul className="list-disc list-inside space-y-1">
             <li>Market Movers &rarr; #premarket</li>
