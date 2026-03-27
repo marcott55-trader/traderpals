@@ -64,8 +64,17 @@ export const flowShortInterest = inngest.createFunction(
 
       if (shortData.length === 0) return false;
 
-      // Only show tickers with notable short volume (> 30%)
-      const notable = shortData.filter((d) => d.shortPercent > 30);
+      // Read min short % from bot_config
+      const { data: cfgRows } = await supabase
+        .from("bot_config")
+        .select("key, value")
+        .like("key", "flow.%");
+      const cfg: Record<string, string> = {};
+      for (const row of cfgRows ?? []) cfg[row.key] = row.value;
+      const minShortPct = parseFloat(cfg["flow.min_short_pct"] ?? "30");
+
+      // Only show tickers with notable short volume
+      const notable = shortData.filter((d) => d.shortPercent > minShortPct);
       if (notable.length === 0) return false;
 
       const lines = notable.slice(0, 15).map((d, i) => {
@@ -122,9 +131,19 @@ export const flowRedditScan = inngest.createFunction(
       }
       await saveRedditMentionLog(mentionMap);
 
+      // Read reddit thresholds from bot_config
+      const { data: cfgRows } = await supabase
+        .from("bot_config")
+        .select("key, value")
+        .like("key", "flow.%");
+      const cfg: Record<string, string> = {};
+      for (const row of cfgRows ?? []) cfg[row.key] = row.value;
+      const spikeThreshold = parseFloat(cfg["flow.reddit_spike_threshold"] ?? "4");
+      const minMentions = parseInt(cfg["flow.reddit_min_mentions"] ?? "15", 10);
+
       // Only post real spikes so the feed stays actionable.
       const spikes = mentions.filter(
-        (m) => m.spikeMultiple >= 4 && m.mentions24h >= 15
+        (m) => m.spikeMultiple >= spikeThreshold && m.mentions24h >= minMentions
       );
 
       if (spikes.length === 0) return { posted: 0, scanned: mentions.length };
@@ -179,8 +198,17 @@ export const flowWeeklySqueezeWatch = inngest.createFunction(
       const tickers = await getWatchlistTickers();
       const shortData = await fetchShortVolume(tickers);
 
-      // Squeeze candidates: high short volume (> 40%)
-      const candidates = shortData.filter((d) => d.shortPercent > 40);
+      // Read min short % from bot_config (squeeze uses a higher bar: minShortPct + 10)
+      const { data: cfgRows } = await supabase
+        .from("bot_config")
+        .select("value")
+        .eq("key", "flow.min_short_pct")
+        .limit(1);
+      const minShortPct = parseFloat(cfgRows?.[0]?.value ?? "30");
+      const squeezeThreshold = minShortPct + 10;
+
+      // Squeeze candidates: short volume above squeeze threshold
+      const candidates = shortData.filter((d) => d.shortPercent > squeezeThreshold);
       if (candidates.length === 0) return false;
 
       const lines = candidates.slice(0, 10).map((d, i) => {

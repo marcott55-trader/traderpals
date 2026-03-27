@@ -25,11 +25,9 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { RSSItem } from "@/types/news";
 
-// Politics-specific: max 1 post per scan cycle to avoid headline spam
-const POLITICS_MAX_PER_CYCLE = 1;
-// Political news already passes isMarketRelevant() filter before scoring,
-// so a lower threshold is fine — source quality (20) is enough
-const POLITICS_SCORE_THRESHOLD = 10;
+// Defaults — overridden by bot_config values from Supabase
+const DEFAULT_POLITICS_MAX_PER_CYCLE = 1;
+const DEFAULT_POLITICS_SCORE_THRESHOLD = 10;
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -106,6 +104,16 @@ export const politicalScan = inngest.createFunction(
       const recentHeadlines = await getRecentHeadlines();
       let postedCount = 0;
 
+      // Read config from bot_config
+      const { data: cfgRows } = await supabase
+        .from("bot_config")
+        .select("key, value")
+        .like("key", "politics.%");
+      const cfg: Record<string, string> = {};
+      for (const row of cfgRows ?? []) cfg[row.key] = row.value;
+      const maxPerCycle = parseInt(cfg["politics.max_per_cycle"] ?? String(DEFAULT_POLITICS_MAX_PER_CYCLE), 10);
+      const scoreThreshold = parseInt(cfg["politics.score_threshold"] ?? String(DEFAULT_POLITICS_SCORE_THRESHOLD), 10);
+
       // Fetch RSS feeds
       const rssItems = await fetchAllPoliticalFeeds(15);
 
@@ -130,7 +138,7 @@ export const politicalScan = inngest.createFunction(
 
       for (const item of allItems) {
         // Per-cycle cap
-        if (postedCount >= POLITICS_MAX_PER_CYCLE) break;
+        if (postedCount >= maxPerCycle) break;
 
         // Must be market-relevant
         if (!isMarketRelevant(item.title)) continue;
@@ -151,7 +159,7 @@ export const politicalScan = inngest.createFunction(
           []
         );
 
-        if (shouldReject || score < POLITICS_SCORE_THRESHOLD) continue;
+        if (shouldReject || score < scoreThreshold) continue;
 
         const sectors = detectSectors(item.title);
 

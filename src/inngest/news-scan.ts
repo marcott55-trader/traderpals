@@ -30,7 +30,6 @@ import {
   etIntervalCronPair,
 } from "@/lib/market-hours";
 import type { ScoredArticle } from "@/types/news";
-import { NEWS_MAX_PER_CYCLE } from "@/types/news";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -204,13 +203,17 @@ async function scanCompanyNews(step: any) {
     let scoreRejected = 0;
     let dedupRejected = 0;
 
-    // Read lookback window from config (default 60 min)
+    // Read config from bot_config
     const { data: cfgRows } = await supabase
       .from("bot_config")
-      .select("value")
-      .eq("key", "news.lookback_minutes")
-      .limit(1);
-    const configuredLookback = parseInt(cfgRows?.[0]?.value ?? "60", 10);
+      .select("key, value")
+      .like("key", "news.%");
+    const cfg: Record<string, string> = {};
+    for (const row of cfgRows ?? []) cfg[row.key] = row.value;
+
+    const configuredLookback = parseInt(cfg["news.lookback_minutes"] ?? "60", 10);
+    const scoreThreshold = parseInt(cfg["news.score_threshold"] ?? "30", 10);
+    const maxPerCycle = parseInt(cfg["news.max_per_cycle"] ?? "3", 10);
     const lookbackMinutes = getEffectiveLookbackMinutes(configuredLookback);
     const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMinutes * 60;
 
@@ -239,7 +242,7 @@ async function scanCompanyNews(step: any) {
           if (article.datetime < lookbackCutoff) continue;
 
           // Stop if we've hit the per-cycle cap
-          if (postedCount >= NEWS_MAX_PER_CYCLE) break;
+          if (postedCount >= maxPerCycle) break;
 
           const newsId = generateNewsId(article.headline, article.source);
 
@@ -275,7 +278,7 @@ async function scanCompanyNews(step: any) {
             relatedTickers
           );
 
-          if (shouldReject || !shouldPost(score)) {
+          if (shouldReject || !shouldPost(score, scoreThreshold)) {
             scoreRejected++;
             continue;
           }
@@ -302,10 +305,10 @@ async function scanCompanyNews(step: any) {
         }
 
         // Break out of ticker loop if cap hit
-        if (postedCount >= NEWS_MAX_PER_CYCLE) break;
+        if (postedCount >= maxPerCycle) break;
       }
 
-      if (postedCount >= NEWS_MAX_PER_CYCLE) break;
+      if (postedCount >= maxPerCycle) break;
 
       // Rate limit pause between batches
       if (i + 4 < tickers.length) {
@@ -380,17 +383,21 @@ async function scanMacroNews(step: any) {
     const articles = await getGeneralNews();
     const { data: cfgRows } = await supabase
       .from("bot_config")
-      .select("value")
-      .eq("key", "news.lookback_minutes")
-      .limit(1);
-    const configuredLookback = parseInt(cfgRows?.[0]?.value ?? "60", 10);
+      .select("key, value")
+      .like("key", "news.%");
+    const cfg: Record<string, string> = {};
+    for (const row of cfgRows ?? []) cfg[row.key] = row.value;
+
+    const configuredLookback = parseInt(cfg["news.lookback_minutes"] ?? "60", 10);
+    const scoreThreshold = parseInt(cfg["news.score_threshold"] ?? "30", 10);
+    const maxPerCycle = parseInt(cfg["news.max_per_cycle"] ?? "3", 10);
     const lookbackMin = getEffectiveLookbackMinutes(configuredLookback);
     const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMin * 60;
 
     for (const article of articles) {
       scannedCount++;
       if (article.datetime < lookbackCutoff) continue;
-      if (postedCount >= NEWS_MAX_PER_CYCLE) break;
+      if (postedCount >= maxPerCycle) break;
 
       const newsId = generateNewsId(article.headline, article.source);
       if (await isAlreadyPosted(newsId)) {
@@ -421,7 +428,7 @@ async function scanMacroNews(step: any) {
         relatedTickers
       );
 
-      if (shouldReject || !shouldPost(score)) {
+      if (shouldReject || !shouldPost(score, scoreThreshold)) {
         scoreRejected++;
         continue;
       }

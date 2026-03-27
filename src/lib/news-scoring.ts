@@ -195,6 +195,6 @@ function getBigrams(str: string): string[] {
 /**
  * Check if score meets the posting threshold.
  */
-export function shouldPost(score: number): boolean {
-  return score >= NEWS_SCORE_THRESHOLD;
+export function shouldPost(score: number, threshold?: number): boolean {
+  return score >= (threshold ?? NEWS_SCORE_THRESHOLD);
 }
