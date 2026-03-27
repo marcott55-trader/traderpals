@@ -2,8 +2,7 @@
  * Political News Module — #politics
  *
  * Schedule:
- *   Every 45 min (24/7) — RSS + Finnhub scan
- *   Runs 24/7 because major political events happen outside market hours.
+ *   Every 30 min (6:00 AM-9:30 PM ET) — RSS + Finnhub scan
  */
 
 import { inngest } from "./client";
@@ -11,6 +10,7 @@ import { getGeneralNews } from "@/lib/finnhub";
 import { fetchAllPoliticalFeeds } from "@/lib/rss";
 import { postEmbed } from "@/lib/discord";
 import { buildPoliticalNewsEmbed } from "@/lib/news-embeds";
+import { etIntervalCron } from "@/lib/market-hours";
 import {
   scoreHeadline,
   isMarketRelevant,
@@ -28,6 +28,7 @@ import type { RSSItem } from "@/types/news";
 // Defaults — overridden by bot_config values from Supabase
 const DEFAULT_POLITICS_MAX_PER_CYCLE = 1;
 const DEFAULT_POLITICS_SCORE_THRESHOLD = 10;
+const POLITICAL_SCAN_LOOKBACK_MINUTES = 35;
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -49,7 +50,9 @@ async function isAlreadyPosted(newsId: string): Promise<boolean> {
   return (data ?? []).length > 0;
 }
 
-async function getRecentHeadlines(minutes: number = 30): Promise<string[]> {
+async function getRecentHeadlines(
+  minutes: number = POLITICAL_SCAN_LOOKBACK_MINUTES
+): Promise<string[]> {
   const cutoff = new Date(Date.now() - minutes * 60 * 1000).toISOString();
   const { data } = await supabase
     .from("posted_news")
@@ -90,13 +93,15 @@ function detectSectors(headline: string): string[] {
   return sectors;
 }
 
-// ── Every 45 min — Political Scan ───────────────────────────────────
+// ── Every 30 min (6:00 AM-9:30 PM ET) — Political Scan ─────────────
+
+const politicalCron = etIntervalCron(30, 6, 21, "*");
 
 export const politicalScan = inngest.createFunction(
   {
     id: "political-scan",
     retries: 2,
-    triggers: [{ cron: "*/45 * * * *" }], // Every 45 min, 24/7 — UTC is fine
+    triggers: [{ cron: politicalCron }],
   },
   async ({ step }) => {
     const posted = await step.run("scan-political", async () => {
@@ -114,8 +119,8 @@ export const politicalScan = inngest.createFunction(
       const maxPerCycle = parseInt(cfg["politics.max_per_cycle"] ?? String(DEFAULT_POLITICS_MAX_PER_CYCLE), 10);
       const scoreThreshold = parseInt(cfg["politics.score_threshold"] ?? String(DEFAULT_POLITICS_SCORE_THRESHOLD), 10);
 
-      // Fetch RSS feeds
-      const rssItems = await fetchAllPoliticalFeeds(15);
+      // Match the fetch window to the 30-minute scheduler cadence with a buffer.
+      const rssItems = await fetchAllPoliticalFeeds(POLITICAL_SCAN_LOOKBACK_MINUTES);
 
       // Also check Finnhub general news for political content
       let finnhubPolitical: RSSItem[] = [];

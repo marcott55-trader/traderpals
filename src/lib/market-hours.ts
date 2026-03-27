@@ -71,6 +71,20 @@ export function getEasternTime(): { hour: number; minute: number } {
   return { hour: d.getHours(), minute: d.getMinutes() };
 }
 
+/** True when current ET time falls inside an inclusive hour/minute window. */
+export function isWithinETWindow(
+  startHour: number,
+  startMinute: number,
+  endHour: number,
+  endMinute: number
+): boolean {
+  const { hour, minute } = getEasternTime();
+  const nowMinutes = hour * 60 + minute;
+  const startMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
+  return nowMinutes >= startMinutes && nowMinutes <= endMinutes;
+}
+
 /** True on Mon-Fri that are not NYSE holidays */
 export function isMarketDay(): boolean {
   const d = getEasternDate();

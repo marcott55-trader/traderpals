@@ -24,9 +24,8 @@ import {
   isMarketDay,
   isNearETTime,
   getEasternDateString,
-  getEasternTime,
+  isWithinETWindow,
   etCron,
-  etIntervalCron,
 } from "@/lib/market-hours";
 import type { EarningsResult } from "@/types/alerts";
 
@@ -190,19 +189,21 @@ export const earningsAMCAlert = inngest.createFunction(
 
 // ── Every 30 min (5-9 AM) — BMO Result Tracking ────────────────────
 
-const bmResultsCron = etIntervalCron(30, 5, 9);
+const bmResultsCrons = [
+  "TZ=America/New_York 0,30 5-8 * * 1-5",
+  "TZ=America/New_York 0 9 * * 1-5",
+];
 
 export const earningsBMOResults = inngest.createFunction(
   {
     id: "earnings-bmo-results",
     retries: 2,
-    triggers: [{ cron: bmResultsCron }],
+    triggers: bmResultsCrons.map((cron) => ({ cron })),
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 5 && hour <= 9;
+      return isWithinETWindow(5, 0, 9, 0);
     });
     if (!shouldRun) return { skipped: true };
     return checkEarningsResults(step);
@@ -211,19 +212,21 @@ export const earningsBMOResults = inngest.createFunction(
 
 // ── Every 30 min (4-8 PM) — AMC Result Tracking ────────────────────
 
-const amcResultsCron = etIntervalCron(30, 16, 20);
+const amcResultsCrons = [
+  "TZ=America/New_York 0,30 16-19 * * 1-5",
+  "TZ=America/New_York 0 20 * * 1-5",
+];
 
 export const earningsAMCResults = inngest.createFunction(
   {
     id: "earnings-amc-results",
     retries: 2,
-    triggers: [{ cron: amcResultsCron }],
+    triggers: amcResultsCrons.map((cron) => ({ cron })),
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 16 && hour <= 20;
+      return isWithinETWindow(16, 0, 20, 0);
     });
     if (!shouldRun) return { skipped: true };
     return checkEarningsResults(step);
@@ -320,15 +323,24 @@ export const earningsWeeklyPreview = inngest.createFunction(
     if (!shouldRun) return { skipped: true };
 
     const [events, watchlist] = await step.run("fetch-week", async () => {
-      const now = new Date();
+      // Use ET to avoid UTC-ahead-of-ET mismatch on Sunday evenings
+      const now = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+      );
       const daysUntilMonday = now.getDay() === 0 ? 1 : 8 - now.getDay();
       const monday = new Date(now);
       monday.setDate(now.getDate() + daysUntilMonday);
       const friday = new Date(monday);
       friday.setDate(monday.getDate() + 4);
 
-      const from = monday.toISOString().split("T")[0];
-      const to = friday.toISOString().split("T")[0];
+      const fmt = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${dd}`;
+      };
+      const from = fmt(monday);
+      const to = fmt(friday);
 
       const [cal, wl] = await Promise.all([
         getEarningsCalendar(from, to),

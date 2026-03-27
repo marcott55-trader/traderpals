@@ -171,7 +171,7 @@ export async function buildKeyLevelsEmbed(
     active.map(async (mover) => {
       const snapshot = byTicker.get(mover.ticker);
       if (!snapshot) return null;
-      const bars = await getRecentMinuteBars(mover.ticker, 2).catch(() => []);
+      const bars = await getRecentMinuteBars(mover.ticker, 5).catch(() => []);
       return buildLevelsFromBars(mover.ticker, snapshot, bars, session);
     })
   );

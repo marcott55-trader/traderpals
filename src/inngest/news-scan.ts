@@ -25,11 +25,13 @@ import {
   isMarketDay,
   getEasternTime,
   getEasternDateString,
-  etIntervalCron,
+  isWithinETWindow,
 } from "@/lib/market-hours";
 import type { ScoredArticle } from "@/types/news";
 
 // ── Shared helpers ──────────────────────────────────────────────────
+
+const NEWS_SCAN_MIN_LOOKBACK_MINUTES = 35;
 
 async function getWatchlistMap(): Promise<Map<string, string>> {
   const { data } = await supabase.from("watchlist").select("ticker, tier");
@@ -49,7 +51,10 @@ async function isAlreadyPosted(newsId: string): Promise<boolean> {
   return (data ?? []).length > 0;
 }
 
-async function getRecentHeadlines(channel: string, minutes: number = 30): Promise<string[]> {
+async function getRecentHeadlines(
+  channel: string,
+  minutes: number = NEWS_SCAN_MIN_LOOKBACK_MINUTES
+): Promise<string[]> {
   const cutoff = new Date(Date.now() - minutes * 60 * 1000).toISOString();
   const { data } = await supabase
     .from("posted_news")
@@ -90,7 +95,11 @@ async function logScanSummary(
   await logSuccess(action, summary);
 
   const posted = typeof summary.posted === "number" ? summary.posted : 0;
-  if (posted === 0) {
+  const scanned = typeof summary.scanned === "number" ? summary.scanned : 0;
+  const ageRejected = typeof summary.ageRejected === "number" ? summary.ageRejected : 0;
+  const recentCandidates = Math.max(0, scanned - ageRejected);
+
+  if (posted === 0 && recentCandidates > 0) {
     const details = Object.entries(summary)
       .map(([key, value]) => `${key}=${String(value)}`)
       .join(" ");
@@ -118,7 +127,9 @@ function getEffectiveLookbackMinutes(defaultMinutes: number): number {
     return Math.max(defaultMinutes, 18 * 60);
   }
 
-  return defaultMinutes;
+  // Keep the lookback at least one scheduler interval wide so stories
+  // don't age out before the next shared scan runs.
+  return Math.max(defaultMinutes, NEWS_SCAN_MIN_LOOKBACK_MINUTES);
 }
 
 function getPrioritizedTickersForCycle(watchlist: Map<string, string>): string[] {
@@ -153,19 +164,21 @@ function getPrioritizedTickersForCycle(watchlist: Map<string, string>): string[]
 
 // ── Every 30 min (5AM-8PM) — Shared News Scan ──────────────────────
 
-const newsCron = etIntervalCron(30, 5, 20);
+const newsCrons = [
+  "TZ=America/New_York 0,30 5-19 * * 1-5",
+  "TZ=America/New_York 0 20 * * 1-5",
+];
 
 export const newsScan = inngest.createFunction(
   {
     id: "news-scan",
     retries: 2,
-    triggers: [{ cron: newsCron }],
+    triggers: newsCrons.map((cron) => ({ cron })),
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 5 && hour <= 20;
+      return isWithinETWindow(5, 0, 20, 0);
     });
     if (!shouldRun) return { skipped: true };
     const company = await scanCompanyNews(step);
@@ -180,11 +193,11 @@ async function scanCompanyNews(step: any) {
     const watchlist = await getWatchlistMap();
     const today = getEasternDateString();
     const previousDate = getPreviousEasternDateString();
-    const recentHeadlines = await getRecentHeadlines("news");
     let postedCount = 0;
     let scannedCount = 0;
     let scoreRejected = 0;
     let dedupRejected = 0;
+    let ageRejected = 0;
 
     // Read config from bot_config
     const { data: cfgRows } = await supabase
@@ -199,6 +212,7 @@ async function scanCompanyNews(step: any) {
     const maxPerCycle = parseInt(cfg["news.max_per_cycle"] ?? "3", 10);
     const lookbackMinutes = getEffectiveLookbackMinutes(configuredLookback);
     const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMinutes * 60;
+    const recentHeadlines = await getRecentHeadlines("news", lookbackMinutes);
 
     // Always cover core tier1 names, then rotate the rest.
     const tickers = getPrioritizedTickersForCycle(watchlist);
@@ -221,7 +235,10 @@ async function scanCompanyNews(step: any) {
         for (const article of articles) {
           scannedCount++;
 
-          if (article.datetime < lookbackCutoff) continue;
+          if (article.datetime < lookbackCutoff) {
+            ageRejected++;
+            continue;
+          }
           if (postedCount >= maxPerCycle) break;
 
           const newsId = generateNewsId(article.headline, article.source);
@@ -289,6 +306,7 @@ async function scanCompanyNews(step: any) {
     return {
       posted: postedCount,
       scanned: scannedCount,
+      ageRejected,
       dedupRejected,
       scoreRejected,
       lookbackMinutes,
@@ -306,11 +324,11 @@ async function scanCompanyNews(step: any) {
 async function scanMacroNews(step: any) {
   const summary = await step.run("scan-macro-news", async () => {
     const watchlist = await getWatchlistMap();
-    const recentHeadlines = await getRecentHeadlines("news");
     let postedCount = 0;
     let scannedCount = 0;
     let scoreRejected = 0;
     let dedupRejected = 0;
+    let ageRejected = 0;
 
     const articles = await getGeneralNews();
     const { data: cfgRows } = await supabase
@@ -325,10 +343,14 @@ async function scanMacroNews(step: any) {
     const maxPerCycle = parseInt(cfg["news.max_per_cycle"] ?? "3", 10);
     const lookbackMin = getEffectiveLookbackMinutes(configuredLookback);
     const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMin * 60;
+    const recentHeadlines = await getRecentHeadlines("news", lookbackMin);
 
     for (const article of articles) {
       scannedCount++;
-      if (article.datetime < lookbackCutoff) continue;
+      if (article.datetime < lookbackCutoff) {
+        ageRejected++;
+        continue;
+      }
       if (postedCount >= maxPerCycle) break;
 
       const newsId = generateNewsId(article.headline, article.source);
@@ -389,6 +411,7 @@ async function scanMacroNews(step: any) {
     return {
       posted: postedCount,
       scanned: scannedCount,
+      ageRejected,
       dedupRejected,
       scoreRejected,
       lookbackMinutes: lookbackMin,

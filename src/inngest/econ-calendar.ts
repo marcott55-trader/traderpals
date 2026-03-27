@@ -24,8 +24,8 @@ import {
   isNearETTime,
   getEasternDateString,
   getEasternTime,
+  isWithinETWindow,
   etCron,
-  etIntervalCron,
 } from "@/lib/market-hours";
 import type { EconEventRow } from "@/types/alerts";
 
@@ -277,19 +277,21 @@ export const econDailyCalendar = inngest.createFunction(
 
 // ── Every 30 min (6AM-8PM ET) — Enhanced Fed Speaker Reminders ─────
 
-const speakerAlertsCron = etIntervalCron(30, 6, 20);
+const speakerAlertsCrons = [
+  "TZ=America/New_York 0,30 6-19 * * 1-5",
+  "TZ=America/New_York 0 20 * * 1-5",
+];
 
 export const econFedSpeakerAlerts = inngest.createFunction(
   {
     id: "econ-fed-speaker-alerts",
     retries: 2,
-    triggers: [{ cron: speakerAlertsCron }],
+    triggers: speakerAlertsCrons.map((cron) => ({ cron })),
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 6 && hour <= 20;
+      return isWithinETWindow(6, 0, 20, 0);
     });
     if (!shouldRun) return { skipped: true };
 
@@ -327,7 +329,7 @@ async function checkFedSpeakerReminders(
       if (eventMinutes == null) continue;
 
       const minutesUntil = eventMinutes - nowMinutes;
-      if (minutesUntil < 0 || minutesUntil > 15) continue;
+      if (minutesUntil < 0 || minutesUntil > 10) continue;
 
       await postEmbed("econ-calendar", buildPreEventAlertEmbed(event));
 
@@ -367,21 +369,29 @@ export const econWeeklyPreview = inngest.createFunction(
     });
     if (!shouldRun) return { skipped: true };
 
-    // Get next week's Monday date
+    // Get next week's Monday date (use ET to avoid UTC-ahead-of-ET mismatch)
     const mondayDate: string = await step.run("get-monday", async () => {
-      const now = new Date();
+      const now = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+      );
       const dayOfWeek = now.getDay(); // 0 = Sunday
       const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
       const monday = new Date(now);
       monday.setDate(now.getDate() + daysUntilMonday);
-      return monday.toISOString().split("T")[0];
+      const y = monday.getFullYear();
+      const m = String(monday.getMonth() + 1).padStart(2, "0");
+      const d = String(monday.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
     });
 
     const fridayDate = await step.run("get-friday", async () => {
       const mon = new Date(mondayDate + "T12:00:00");
       const fri = new Date(mon);
       fri.setDate(mon.getDate() + 4);
-      return fri.toISOString().split("T")[0];
+      const y = fri.getFullYear();
+      const m = String(fri.getMonth() + 1).padStart(2, "0");
+      const d = String(fri.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
     });
 
     // Fetch week's events from FRED + Fed calendar
