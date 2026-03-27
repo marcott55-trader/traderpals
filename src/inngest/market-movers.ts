@@ -1,5 +1,6 @@
 import { inngest } from "./client";
-import { getTopGainers, getTopLosers } from "@/lib/polygon";
+import { getTopGainers, getTopLosers, getLowFloatMovers } from "@/lib/polygon";
+import type { LowFloatMover } from "@/lib/polygon";
 import { getFuturesQuotes } from "@/lib/finnhub";
 import { postEmbed } from "@/lib/discord";
 import {
@@ -164,14 +165,25 @@ async function fetchAndPostMovers(
     }
   );
 
+  // Fetch low float movers for premarket and after-hours
+  let lowFloatGainers: LowFloatMover[] = [];
+  let lowFloatLosers: LowFloatMover[] = [];
+  if (embedType === "premarket" || embedType === "premarket-update" || embedType === "after-hours") {
+    const lowFloat = await step.run("fetch-low-float", async () => {
+      return getLowFloatMovers();
+    });
+    lowFloatGainers = lowFloat.gainers;
+    lowFloatLosers = lowFloat.losers;
+  }
+
   // Build the correct embed for this schedule
   let embed;
   switch (embedType) {
     case "premarket":
-      embed = buildPremarketEmbed(futures, gainers, losers);
+      embed = buildPremarketEmbed(futures, gainers, losers, false, lowFloatGainers, lowFloatLosers);
       break;
     case "premarket-update":
-      embed = buildPremarketEmbed(futures, gainers, losers, true);
+      embed = buildPremarketEmbed(futures, gainers, losers, true, lowFloatGainers, lowFloatLosers);
       break;
     case "open":
       embed = buildMarketOpenEmbed(gainers, losers);
@@ -183,7 +195,7 @@ async function fetchAndPostMovers(
       embed = buildCloseEmbed(gainers, losers);
       break;
     case "after-hours":
-      embed = buildAfterHoursEmbed(gainers, losers);
+      embed = buildAfterHoursEmbed(gainers, losers, lowFloatGainers, lowFloatLosers);
       break;
   }
 

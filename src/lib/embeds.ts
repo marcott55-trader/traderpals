@@ -3,6 +3,7 @@ import type {
   MarketMover,
   FuturesQuote,
 } from "@/types/market";
+import type { LowFloatMover } from "@/lib/polygon";
 import { getEasternTimeString, getFormattedDate } from "@/lib/market-hours";
 
 // Canonical color palette — all modules use these
@@ -49,11 +50,47 @@ function formatMoverLine(m: MarketMover, rank: number): string {
   return `${rank}. ${star}${m.ticker}  ${formatChange(m.changePercent)}  ${formatPrice(m.price)}${vol}`;
 }
 
+function formatLowFloatLine(m: LowFloatMover, rank: number): string {
+  const floatStr = formatVolume(m.float);
+  return `${rank}. **${m.ticker}**  ${formatChange(m.changePercent)}  ${formatPrice(m.price)}  Float: ${floatStr}  Vol: ${formatVolume(m.volume)}`;
+}
+
+function buildLowFloatFields(
+  gainers: LowFloatMover[],
+  losers: LowFloatMover[]
+): { name: string; value: string }[] {
+  const fields: { name: string; value: string }[] = [];
+
+  if (gainers.length > 0) {
+    fields.push({
+      name: "🚀 LOW FLOAT GAINERS",
+      value: gainers
+        .slice(0, 10)
+        .map((m, i) => formatLowFloatLine(m, i + 1))
+        .join("\n"),
+    });
+  }
+
+  if (losers.length > 0) {
+    fields.push({
+      name: "💥 LOW FLOAT LOSERS",
+      value: losers
+        .slice(0, 10)
+        .map((m, i) => formatLowFloatLine(m, i + 1))
+        .join("\n"),
+    });
+  }
+
+  return fields;
+}
+
 export function buildPremarketEmbed(
   futures: FuturesQuote[],
   gainers: MarketMover[],
   losers: MarketMover[],
-  isUpdate: boolean = false
+  isUpdate: boolean = false,
+  lowFloatGainers: LowFloatMover[] = [],
+  lowFloatLosers: LowFloatMover[] = []
 ): DiscordEmbed {
   const fields = [];
 
@@ -82,12 +119,14 @@ export function buildPremarketEmbed(
     });
   }
 
+  fields.push(...buildLowFloatFields(lowFloatGainers, lowFloatLosers));
+
   const label = isUpdate ? "PRE-MARKET UPDATE" : "PRE-MARKET MOVERS";
   return {
     title: `📊 ${label} — ${getFormattedDate()}`,
     color: COLORS.BLUE,
     fields,
-    footer: { text: `Finnhub • ${getEasternTimeString()}` },
+    footer: { text: `Polygon.io • ${getEasternTimeString()}` },
   };
 }
 
@@ -189,7 +228,9 @@ export function buildCloseEmbed(
 
 export function buildAfterHoursEmbed(
   gainers: MarketMover[],
-  losers: MarketMover[]
+  losers: MarketMover[],
+  lowFloatGainers: LowFloatMover[] = [],
+  lowFloatLosers: LowFloatMover[] = []
 ): DiscordEmbed {
   const fields = [];
 
@@ -210,6 +251,8 @@ export function buildAfterHoursEmbed(
         .join("\n"),
     });
   }
+
+  fields.push(...buildLowFloatFields(lowFloatGainers, lowFloatLosers));
 
   return {
     title: `📊 WATCHLIST AFTER-HOURS — ${getFormattedDate()}`,

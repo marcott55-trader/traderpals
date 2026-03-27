@@ -26,6 +26,19 @@ export interface PolygonSnapshotTicker {
     v: number;
     vw: number;
   };
+  min?: {
+    av: number; // aggregate volume
+    c: number;
+    h: number;
+    l: number;
+    n: number;
+    o: number;
+    t: number;
+    v: number;
+    vw: number;
+    dv?: string;
+    dav?: string;
+  };
 }
 
 export interface PolygonSnapshotResponse {
