@@ -50,6 +50,25 @@ function formatMoverLine(m: MarketMover, rank: number): string {
   return `${rank}. ${star}${m.ticker}  ${formatChange(m.changePercent)}  ${formatPrice(m.price)}${vol}`;
 }
 
+function buildWatchlistFocusField(
+  gainers: MarketMover[],
+  losers: MarketMover[]
+): { name: string; value: string } | null {
+  const watchlistMovers = [...gainers, ...losers]
+    .filter((m) => m.isWatchlist)
+    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+    .slice(0, 8);
+
+  if (watchlistMovers.length === 0) return null;
+
+  return {
+    name: "⭐ WATCHLIST IN PLAY",
+    value: watchlistMovers
+      .map((m, i) => formatMoverLine(m, i + 1))
+      .join("\n"),
+  };
+}
+
 function formatLowFloatLine(m: LowFloatMover, rank: number): string {
   const floatStr = formatVolume(m.float);
   return `${rank}. **${m.ticker}**  ${formatChange(m.changePercent)}  ${formatPrice(m.price)}  Float: ${floatStr}  Vol: ${formatVolume(m.volume)}`;
@@ -93,6 +112,9 @@ export function buildPremarketEmbed(
   lowFloatLosers: LowFloatMover[] = []
 ): DiscordEmbed {
   const fields = [];
+  const watchlistField = buildWatchlistFocusField(gainers, losers);
+
+  if (watchlistField) fields.push(watchlistField);
 
   if (futures.length > 0) {
     fields.push({
@@ -135,6 +157,9 @@ export function buildMarketOpenEmbed(
   losers: MarketMover[]
 ): DiscordEmbed {
   const fields = [];
+  const watchlistField = buildWatchlistFocusField(gainers, losers);
+
+  if (watchlistField) fields.push(watchlistField);
 
   if (gainers.length > 0) {
     fields.push({
@@ -167,6 +192,9 @@ export function buildIntradayEmbed(
   losers: MarketMover[]
 ): DiscordEmbed {
   const fields = [];
+  const watchlistField = buildWatchlistFocusField(gainers, losers);
+
+  if (watchlistField) fields.push(watchlistField);
 
   if (gainers.length > 0) {
     fields.push({
@@ -199,6 +227,9 @@ export function buildCloseEmbed(
   losers: MarketMover[]
 ): DiscordEmbed {
   const fields = [];
+  const watchlistField = buildWatchlistFocusField(gainers, losers);
+
+  if (watchlistField) fields.push(watchlistField);
 
   if (gainers.length > 0) {
     fields.push({
@@ -233,6 +264,9 @@ export function buildAfterHoursEmbed(
   lowFloatLosers: LowFloatMover[] = []
 ): DiscordEmbed {
   const fields = [];
+  const watchlistField = buildWatchlistFocusField(gainers, losers);
+
+  if (watchlistField) fields.push(watchlistField);
 
   if (gainers.length > 0) {
     fields.push({

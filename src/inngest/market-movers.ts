@@ -258,43 +258,43 @@ export const premarketMovers = inngest.createFunction(
   }
 );
 
-// 8:00 AM ET — Pre-market update (refreshed movers)
-const [premarket8amEDT, premarket8amEST] = etCronPair(8, 0);
+// 8:45 AM ET — Final pre-market game plan
+const [premarket845EDT, premarket845EST] = etCronPair(8, 45);
 export const premarketUpdate = inngest.createFunction(
   {
     id: "premarket-update",
     retries: 3,
-    triggers: [{ cron: premarket8amEDT }, { cron: premarket8amEST }],
+    triggers: [{ cron: premarket845EDT }, { cron: premarket845EST }],
   },
   async ({ step }) => {
-    const shouldRun = await makeGuard(8, 0)(step);
+    const shouldRun = await makeGuard(8, 45)(step);
     if (!shouldRun) return { skipped: true, reason: "DST dedup or not market day" };
     await fetchAndPostMovers(step, "premarket-update");
-    return { posted: "premarket-8am" };
+    return { posted: "premarket-845" };
   }
 );
 
-// 9:30 AM ET — Market open snapshot
-const [open930EDT, open930EST] = etCronPair(9, 30);
+// 9:35 AM ET — Market open snapshot after the first shakeout
+const [open935EDT, open935EST] = etCronPair(9, 35);
 export const marketOpenMovers = inngest.createFunction(
   {
     id: "market-open-movers",
     retries: 3,
-    triggers: [{ cron: open930EDT }, { cron: open930EST }],
+    triggers: [{ cron: open935EDT }, { cron: open935EST }],
   },
   async ({ step }) => {
-    const shouldRun = await makeGuard(9, 30)(step);
+    const shouldRun = await makeGuard(9, 35)(step);
     if (!shouldRun) return { skipped: true, reason: "DST dedup or not market day" };
     await fetchAndPostMovers(step, "open");
     return { posted: "open" };
   }
 );
 
-// Every 30 min, 10:00 AM – 3:30 PM ET — Intraday scan
+// Every 60 min, 10:00 AM – 3:00 PM ET — Intraday scan
 // Unlike fixed-time jobs, interval crons have overlapping UTC hour ranges
 // during the "wrong" DST period. We must check that the current ET hour
 // falls within 10-15 AND that the DST offset matches this invocation's cron.
-const [intradayEDT, intradayEST] = etIntervalCronPair(30, 10, 15);
+const [intradayEDT, intradayEST] = etIntervalCronPair(60, 10, 15);
 export const intradayMoversEDT = inngest.createFunction(
   {
     id: "intraday-movers-edt",
@@ -333,32 +333,32 @@ export const intradayMoversEST = inngest.createFunction(
   }
 );
 
-// 4:00 PM ET — Market close summary
-const [close4pmEDT, close4pmEST] = etCronPair(16, 0);
+// 3:55 PM ET — Market close summary before the bell
+const [close355EDT, close355EST] = etCronPair(15, 55);
 export const marketCloseMovers = inngest.createFunction(
   {
     id: "market-close-movers",
     retries: 3,
-    triggers: [{ cron: close4pmEDT }, { cron: close4pmEST }],
+    triggers: [{ cron: close355EDT }, { cron: close355EST }],
   },
   async ({ step }) => {
-    const shouldRun = await makeGuard(16, 0)(step);
+    const shouldRun = await makeGuard(15, 55)(step);
     if (!shouldRun) return { skipped: true, reason: "DST dedup or not market day" };
     await fetchAndPostMovers(step, "close");
     return { posted: "close" };
   }
 );
 
-// 4:15 PM ET — After-hours movers
-const [ah415EDT, ah415EST] = etCronPair(16, 15);
+// 4:10 PM ET — After-hours movers
+const [ah410EDT, ah410EST] = etCronPair(16, 10);
 export const afterHoursMovers = inngest.createFunction(
   {
     id: "after-hours-movers",
     retries: 3,
-    triggers: [{ cron: ah415EDT }, { cron: ah415EST }],
+    triggers: [{ cron: ah410EDT }, { cron: ah410EST }],
   },
   async ({ step }) => {
-    const shouldRun = await makeGuard(16, 15)(step);
+    const shouldRun = await makeGuard(16, 10)(step);
     if (!shouldRun) return { skipped: true, reason: "DST dedup or not market day" };
     await fetchAndPostMovers(step, "after-hours");
     return { posted: "after-hours" };

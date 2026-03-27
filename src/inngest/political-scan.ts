@@ -25,8 +25,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { RSSItem } from "@/types/news";
 
-// Politics-specific: max 2 posts per 10-min scan cycle
-const POLITICS_MAX_PER_CYCLE = 2;
+// Politics-specific: max 1 post per scan cycle to avoid headline spam
+const POLITICS_MAX_PER_CYCLE = 1;
 // Political news already passes isMarketRelevant() filter before scoring,
 // so a lower threshold is fine — source quality (20) is enough
 const POLITICS_SCORE_THRESHOLD = 10;
@@ -92,13 +92,13 @@ function detectSectors(headline: string): string[] {
   return sectors;
 }
 
-// ── Every 10 min — Political Scan ───────────────────────────────────
+// ── Every 15 min — Political Scan ───────────────────────────────────
 
 export const politicalScan = inngest.createFunction(
   {
     id: "political-scan",
     retries: 2,
-    triggers: [{ cron: "*/10 * * * *" }], // Every 10 min, 24/7 — UTC is fine
+    triggers: [{ cron: "*/15 * * * *" }], // Every 15 min, 24/7 — UTC is fine
   },
   async ({ step }) => {
     const posted = await step.run("scan-political", async () => {

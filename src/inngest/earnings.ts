@@ -2,10 +2,10 @@
  * Earnings Module — #earnings
  *
  * Schedule:
- *   6:30 AM ET (weekdays)    — Daily earnings calendar
- *   6:15 AM ET (weekdays)    — Pre-report alert (BMO watchlist)
- *   3:45 PM ET (weekdays)    — Pre-report alert (AMC watchlist)
- *   Every 2 min (6-9 AM)     — Result tracking (BMO window)
+ *   5:15 AM ET (weekdays)    — Daily earnings calendar
+ *   6:00 AM ET (weekdays)    — Pre-report alert (BMO watchlist)
+ *   3:30 PM ET (weekdays)    — Pre-report alert (AMC watchlist)
+ *   Every 2 min (5-9 AM)     — Result tracking (BMO window)
  *   Every 2 min (4-8 PM)     — Result tracking (AMC window)
  *   8:00 PM ET Sunday        — Week-ahead preview
  */
@@ -46,20 +46,20 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
   });
 }
 
-// ── 6:30 AM ET — Daily Earnings Calendar ────────────────────────────
+// ── 5:15 AM ET — Daily Earnings Calendar ────────────────────────────
 
-const [daily630EDT, daily630EST] = etCronPair(6, 30);
+const [daily515EDT, daily515EST] = etCronPair(5, 15);
 
 export const earningsDailyCalendar = inngest.createFunction(
   {
     id: "earnings-daily-calendar",
     retries: 3,
-    triggers: [{ cron: daily630EDT }, { cron: daily630EST }],
+    triggers: [{ cron: daily515EDT }, { cron: daily515EST }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
-      return isNearETTime(6, 30);
+      return isNearETTime(5, 15);
     });
     if (!shouldRun) return { skipped: true };
 
@@ -113,20 +113,20 @@ export const earningsDailyCalendar = inngest.createFunction(
   }
 );
 
-// ── 6:15 AM ET — BMO Pre-Report Alert ──────────────────────────────
+// ── 6:00 AM ET — BMO Pre-Report Alert ──────────────────────────────
 
-const [bmo615EDT, bmo615EST] = etCronPair(6, 15);
+const [bmo600EDT, bmo600EST] = etCronPair(6, 0);
 
 export const earningsBMOAlert = inngest.createFunction(
   {
     id: "earnings-bmo-alert",
     retries: 3,
-    triggers: [{ cron: bmo615EDT }, { cron: bmo615EST }],
+    triggers: [{ cron: bmo600EDT }, { cron: bmo600EST }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
-      return isNearETTime(6, 15);
+      return isNearETTime(6, 0);
     });
     if (!shouldRun) return { skipped: true };
 
@@ -151,20 +151,20 @@ export const earningsBMOAlert = inngest.createFunction(
   }
 );
 
-// ── 3:45 PM ET — AMC Pre-Report Alert ──────────────────────────────
+// ── 3:30 PM ET — AMC Pre-Report Alert ──────────────────────────────
 
-const [amc345EDT, amc345EST] = etCronPair(15, 45);
+const [amc330EDT, amc330EST] = etCronPair(15, 30);
 
 export const earningsAMCAlert = inngest.createFunction(
   {
     id: "earnings-amc-alert",
     retries: 3,
-    triggers: [{ cron: amc345EDT }, { cron: amc345EST }],
+    triggers: [{ cron: amc330EDT }, { cron: amc330EST }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
-      return isNearETTime(15, 45);
+      return isNearETTime(15, 30);
     });
     if (!shouldRun) return { skipped: true };
 
@@ -189,9 +189,9 @@ export const earningsAMCAlert = inngest.createFunction(
   }
 );
 
-// ── Every 2 min (6-9 AM) — BMO Result Tracking ─────────────────────
+// ── Every 2 min (5-9 AM) — BMO Result Tracking ─────────────────────
 
-const [bmResultsEDT, bmResultsEST] = etIntervalCronPair(2, 6, 9);
+const [bmResultsEDT, bmResultsEST] = etIntervalCronPair(2, 5, 9);
 
 export const earningsBMOResultsEDT = inngest.createFunction(
   {
@@ -203,7 +203,7 @@ export const earningsBMOResultsEDT = inngest.createFunction(
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || !isEDT()) return false;
       const { hour } = getEasternTime();
-      return hour >= 6 && hour <= 9;
+      return hour >= 5 && hour <= 9;
     });
     if (!shouldRun) return { skipped: true };
     return checkEarningsResults(step);
@@ -220,7 +220,7 @@ export const earningsBMOResultsEST = inngest.createFunction(
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || isEDT()) return false;
       const { hour } = getEasternTime();
-      return hour >= 6 && hour <= 9;
+      return hour >= 5 && hour <= 9;
     });
     if (!shouldRun) return { skipped: true };
     return checkEarningsResults(step);
@@ -269,7 +269,7 @@ export const earningsAMCResultsEST = inngest.createFunction(
 async function checkEarningsResults(step: any) {
   const today = getEasternDateString();
 
-  const results = await step.run("check-results", async () => {
+  const summary = await step.run("check-results", async () => {
     // Get pending earnings for today
     const { data: pending } = await supabase
       .from("posted_earnings")
@@ -277,7 +277,9 @@ async function checkEarningsResults(step: any) {
       .eq("report_date", today)
       .eq("result_posted", false);
 
-    if (!pending || pending.length === 0) return [];
+    if (!pending || pending.length === 0) {
+      return { pendingCount: 0, resultsPosted: 0, readyCount: 0 };
+    }
 
     const watchlist = await getWatchlistTickers();
 
@@ -288,10 +290,12 @@ async function checkEarningsResults(step: any) {
     );
 
     const posted: EarningsResult[] = [];
+    let readyCount = 0;
 
     for (const row of pending) {
       const fresh = freshByTicker.get(row.ticker);
       if (!fresh || fresh.epsActual == null) continue;
+      readyCount += 1;
 
       const isBeat = fresh.epsEstimate != null
         ? fresh.epsActual >= fresh.epsEstimate
@@ -324,10 +328,14 @@ async function checkEarningsResults(step: any) {
       posted.push(result);
     }
 
-    return posted;
+    return {
+      pendingCount: pending.length,
+      readyCount,
+      resultsPosted: posted.length,
+    };
   });
 
-  return { checked: true, resultsPosted: results.length };
+  return { checked: true, ...summary };
 }
 
 // ── Sunday 8 PM ET — Week-Ahead Preview ─────────────────────────────

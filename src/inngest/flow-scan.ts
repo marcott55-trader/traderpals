@@ -3,7 +3,7 @@
  *
  * V1 (free data):
  *   6:00 PM ET (weekdays)   — Daily short volume from FINRA
- *   Every 30 min (24/7)     — Reddit sentiment scan
+ *   Every 60 min (24/7)     — Reddit sentiment scan
  *   Sunday 8:00 PM ET       — Weekly short squeeze watchlist
  *
  * V2 (paid, not yet implemented):
@@ -96,13 +96,13 @@ export const flowShortInterest = inngest.createFunction(
   }
 );
 
-// ── Every 30 min — Reddit Sentiment Scan ────────────────────────────
+// ── Every 60 min — Reddit Sentiment Scan ────────────────────────────
 
 export const flowRedditScan = inngest.createFunction(
   {
     id: "flow-reddit-scan",
     retries: 1,
-    triggers: [{ cron: "*/30 * * * *" }],
+    triggers: [{ cron: "0 * * * *" }],
   },
   async ({ step }) => {
     // Skip if Reddit credentials aren't configured
@@ -122,9 +122,9 @@ export const flowRedditScan = inngest.createFunction(
       }
       await saveRedditMentionLog(mentionMap);
 
-      // Only post spikes (3x+ above 7-day average, minimum 10 mentions)
+      // Only post real spikes so the feed stays actionable.
       const spikes = mentions.filter(
-        (m) => m.spikeMultiple >= 3 && m.mentions24h >= 10
+        (m) => m.spikeMultiple >= 4 && m.mentions24h >= 15
       );
 
       if (spikes.length === 0) return { posted: 0, scanned: mentions.length };

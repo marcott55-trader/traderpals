@@ -2,8 +2,8 @@
  * Price Alerts Module — #alerts
  *
  * Schedule:
- *   Every 1 min (9AM-4PM, weekdays)       — Price check (regular hours)
- *   Every 5 min (4-9AM, 4-8PM, weekdays)  — Price check (extended hours)
+ *   Every 1 min (9:30AM-4PM, weekdays)    — Price check (regular hours)
+ *   Every 2 min (4-9:30AM, 4-8PM, weekdays) — Price check (extended hours)
  */
 
 import { inngest } from "./client";
@@ -69,6 +69,24 @@ function isInCooldown(alert: PriceAlertRow): boolean {
   const triggeredAt = new Date(alert.triggered_at).getTime();
   const cooldownMs = ALERT_COOLDOWN_MINUTES * 60 * 1000;
   return Date.now() - triggeredAt < cooldownMs;
+}
+
+function isRegularSessionWindow(): boolean {
+  const { hour, minute } = getEasternTime();
+  const minutesSinceMidnight = hour * 60 + minute;
+  return minutesSinceMidnight >= 570 && minutesSinceMidnight <= 960;
+}
+
+function isPremarketWindow(): boolean {
+  const { hour, minute } = getEasternTime();
+  const minutesSinceMidnight = hour * 60 + minute;
+  return minutesSinceMidnight >= 240 && minutesSinceMidnight < 570;
+}
+
+function isAfterHoursWindow(): boolean {
+  const { hour, minute } = getEasternTime();
+  const minutesSinceMidnight = hour * 60 + minute;
+  return minutesSinceMidnight >= 960 && minutesSinceMidnight < 1200;
 }
 
 // ── Core price check logic ──────────────────────────────────────────
@@ -158,7 +176,7 @@ async function checkPriceAlerts(step: any) {
   return { triggered };
 }
 
-// ── Every 1 min (9AM-4PM) — Regular Hours Price Check ───────────────
+// ── Every 1 min (9:30AM-4PM) — Regular Hours Price Check ────────────
 
 const [regularEDT, regularEST] = etIntervalCronPair(1, 9, 16);
 
@@ -171,8 +189,7 @@ export const priceAlertsRegularEDT = inngest.createFunction(
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || !isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 9 && hour <= 16;
+      return isRegularSessionWindow();
     });
     if (!shouldRun) return { skipped: true };
     return checkPriceAlerts(step);
@@ -188,18 +205,17 @@ export const priceAlertsRegularEST = inngest.createFunction(
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 9 && hour <= 16;
+      return isRegularSessionWindow();
     });
     if (!shouldRun) return { skipped: true };
     return checkPriceAlerts(step);
   }
 );
 
-// ── Every 5 min (4-9AM, 4-8PM) — Extended Hours Price Check ────────
+// ── Every 2 min (4-9:30AM, 4-8PM) — Extended Hours Price Check ─────
 
-const [extPreEDT, extPreEST] = etIntervalCronPair(5, 4, 9);
-const [extPostEDT, extPostEST] = etIntervalCronPair(5, 16, 20);
+const [extPreEDT, extPreEST] = etIntervalCronPair(2, 4, 9);
+const [extPostEDT, extPostEST] = etIntervalCronPair(2, 16, 20);
 
 export const priceAlertsExtPreEDT = inngest.createFunction(
   {
@@ -210,8 +226,7 @@ export const priceAlertsExtPreEDT = inngest.createFunction(
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || !isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 4 && hour < 9;
+      return isPremarketWindow();
     });
     if (!shouldRun) return { skipped: true };
     return checkPriceAlerts(step);
@@ -227,8 +242,7 @@ export const priceAlertsExtPreEST = inngest.createFunction(
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 4 && hour < 9;
+      return isPremarketWindow();
     });
     if (!shouldRun) return { skipped: true };
     return checkPriceAlerts(step);
@@ -244,8 +258,7 @@ export const priceAlertsExtPostEDT = inngest.createFunction(
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || !isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 16 && hour < 20;
+      return isAfterHoursWindow();
     });
     if (!shouldRun) return { skipped: true };
     return checkPriceAlerts(step);
@@ -261,8 +274,7 @@ export const priceAlertsExtPostEST = inngest.createFunction(
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || isEDT()) return false;
-      const { hour } = getEasternTime();
-      return hour >= 16 && hour < 20;
+      return isAfterHoursWindow();
     });
     if (!shouldRun) return { skipped: true };
     return checkPriceAlerts(step);

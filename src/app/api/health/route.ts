@@ -12,6 +12,7 @@ const REQUIRED_ENV_VARS = [
   "FINNHUB_API_KEY",
   "POLYGON_API_KEY",
   "FMP_API_KEY",
+  "FRED_API_KEY",
   // Discord webhooks (all channels)
   "DISCORD_WEBHOOK_PREMARKET",
   "DISCORD_WEBHOOK_NEWS",

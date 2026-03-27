@@ -2,8 +2,8 @@
  * News Module — #news
  *
  * Schedule:
- *   Every 15 min (6AM-8PM, weekdays)  — Company news scan
- *   Every 15 min (6AM-8PM, weekdays)  — Macro/general news scan
+ *   Every 5 min (5AM-8PM, weekdays)   — Company news scan
+ *   Every 10 min (5AM-8PM, weekdays)  — Macro/general news scan
  */
 
 import { inngest } from "./client";
@@ -86,9 +86,39 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
   });
 }
 
-// ── Every 5 min (6AM-8PM) — Company News Scan ──────────────────────
+function getPrioritizedTickersForCycle(watchlist: Map<string, string>): string[] {
+  const entries = Array.from(watchlist.entries()).sort((a, b) => {
+    const priority = { tier1: 0, tier2: 1, futures: 2, custom: 3 };
+    const aRank = priority[a[1] as keyof typeof priority] ?? 9;
+    const bRank = priority[b[1] as keyof typeof priority] ?? 9;
+    if (aRank !== bRank) return aRank - bRank;
+    return a[0].localeCompare(b[0]);
+  });
 
-const [companyEDT, companyEST] = etIntervalCronPair(15, 6, 20);
+  const core = entries
+    .filter(([, tier]) => tier === "tier1")
+    .map(([ticker]) => ticker)
+    .slice(0, 8);
+
+  const remainder = entries
+    .filter(([ticker]) => !core.includes(ticker))
+    .map(([ticker]) => ticker);
+
+  if (remainder.length === 0) return core;
+
+  const rotationSize = 6;
+  const slot = Math.floor(Date.now() / (5 * 60 * 1000));
+  const offset = (slot * rotationSize) % remainder.length;
+  const rotated = remainder
+    .slice(offset, offset + rotationSize)
+    .concat(remainder.slice(0, Math.max(0, offset + rotationSize - remainder.length)));
+
+  return Array.from(new Set([...core, ...rotated]));
+}
+
+// ── Every 5 min (5AM-8PM) — Company News Scan ──────────────────────
+
+const [companyEDT, companyEST] = etIntervalCronPair(5, 5, 20);
 
 export const newsCompanyScanEDT = inngest.createFunction(
   {
@@ -100,7 +130,7 @@ export const newsCompanyScanEDT = inngest.createFunction(
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || !isEDT()) return false;
       const { hour } = getEasternTime();
-      return hour >= 6 && hour <= 20;
+      return hour >= 5 && hour <= 20;
     });
     if (!shouldRun) return { skipped: true };
     return scanCompanyNews(step);
@@ -117,7 +147,7 @@ export const newsCompanyScanEST = inngest.createFunction(
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || isEDT()) return false;
       const { hour } = getEasternTime();
-      return hour >= 6 && hour <= 20;
+      return hour >= 5 && hour <= 20;
     });
     if (!shouldRun) return { skipped: true };
     return scanCompanyNews(step);
@@ -141,15 +171,12 @@ async function scanCompanyNews(step: any) {
     const lookbackMinutes = parseInt(cfgRows?.[0]?.value ?? "60", 10);
     const lookbackCutoff = Math.floor(Date.now() / 1000) - lookbackMinutes * 60;
 
-    // Only scan 5 tickers per cycle to stay within Vercel's 60s timeout.
-    // Rotate through the watchlist across cycles using a simple offset.
-    const allTickers = Array.from(watchlist.keys());
-    const cycleOffset = Math.floor(Date.now() / (15 * 60 * 1000)) % Math.ceil(allTickers.length / 5);
-    const tickers = allTickers.slice(cycleOffset * 5, cycleOffset * 5 + 5);
+    // Always cover core tier1 names, then rotate the rest.
+    const tickers = getPrioritizedTickersForCycle(watchlist);
 
     // Process tickers
-    for (let i = 0; i < tickers.length; i += 5) {
-      const batch = tickers.slice(i, i + 5);
+    for (let i = 0; i < tickers.length; i += 4) {
+      const batch = tickers.slice(i, i + 4);
 
       const newsResults = await Promise.allSettled(
         batch.map((ticker) => getCompanyNews(ticker, today, today))
@@ -224,7 +251,7 @@ async function scanCompanyNews(step: any) {
       if (postedCount >= NEWS_MAX_PER_CYCLE) break;
 
       // Rate limit pause between batches
-      if (i + 5 < tickers.length) {
+      if (i + 4 < tickers.length) {
         await new Promise((r) => setTimeout(r, 1000));
       }
     }
@@ -239,9 +266,9 @@ async function scanCompanyNews(step: any) {
   return { posted };
 }
 
-// ── Every 15 min (6AM-8PM) — Macro/General News ────────────────────
+// ── Every 10 min (5AM-8PM) — Macro/General News ────────────────────
 
-const [macroEDT, macroEST] = etIntervalCronPair(15, 6, 20);
+const [macroEDT, macroEST] = etIntervalCronPair(10, 5, 20);
 
 export const newsMacroScanEDT = inngest.createFunction(
   {
@@ -253,7 +280,7 @@ export const newsMacroScanEDT = inngest.createFunction(
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || !isEDT()) return false;
       const { hour } = getEasternTime();
-      return hour >= 6 && hour <= 20;
+      return hour >= 5 && hour <= 20;
     });
     if (!shouldRun) return { skipped: true };
     return scanMacroNews(step);
@@ -270,7 +297,7 @@ export const newsMacroScanEST = inngest.createFunction(
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay() || isEDT()) return false;
       const { hour } = getEasternTime();
-      return hour >= 6 && hour <= 20;
+      return hour >= 5 && hour <= 20;
     });
     if (!shouldRun) return { skipped: true };
     return scanMacroNews(step);

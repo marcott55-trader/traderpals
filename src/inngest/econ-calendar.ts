@@ -2,20 +2,18 @@
  * Econ Calendar Module — #econ-calendar
  *
  * Schedule:
- *   6:30 AM ET (weekdays)  — Daily calendar post
- *   Every 1 min (6AM-4PM)  — Pre-event alerts (15 min before high-impact)
+ *   5:00 AM ET (weekdays)  — Daily calendar post
  *   Every 1 min (6AM-4PM)  — Result drops (poll for actuals)
  *   8:00 PM ET Sunday      — Week-ahead preview
  */
 
 import { inngest } from "./client";
+import type { GetStepTools } from "inngest";
 import { getTodaysReleases, getWeekReleases } from "@/lib/fred";
 import { getFedEventsForDate, getFedEventsForWeek } from "@/lib/fed-calendar";
 import { postEmbed } from "@/lib/discord";
 import {
   buildDailyEconCalendarEmbed,
-  buildPreEventAlertEmbed,
-  buildResultDropEmbed,
   buildWeeklyPreviewEmbed,
 } from "@/lib/econ-embeds";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +35,28 @@ async function logSuccess(action: string, details: Record<string, unknown>) {
     action,
     details,
   });
+}
+
+function inferReleaseTime(name: string): string | null {
+  const normalized = name.trim().toLowerCase();
+
+  const releaseTimes: Record<string, string> = {
+    "cpi": "08:30:00",
+    "ppi": "08:30:00",
+    "jobs report (nfp)": "08:30:00",
+    "gdp": "08:30:00",
+    "jobless claims": "08:30:00",
+    "adp employment": "08:15:00",
+    "pce inflation": "08:30:00",
+    "employment cost index": "08:30:00",
+    "retail sales": "08:30:00",
+    "building permits": "08:30:00",
+    "housing vacancies": "08:30:00",
+    "fomc statement": "14:00:00",
+    "gdpnow": "10:00:00",
+  };
+
+  return releaseTimes[normalized] ?? null;
 }
 
 /**
@@ -65,7 +85,7 @@ async function fetchAndCacheTodaysEvents(): Promise<EconEventRow[]> {
   for (const r of fredReleases) {
     rows.push({
       event_date: today,
-      event_time: null, // FRED doesn't provide exact time — most are 8:30 AM ET
+      event_time: inferReleaseTime(r.name),
       event_name: r.name,
       country: "US",
       impact: r.impact,
@@ -121,20 +141,20 @@ async function fetchAndCacheTodaysEvents(): Promise<EconEventRow[]> {
   return (data ?? []) as EconEventRow[];
 }
 
-// ── 6:30 AM ET — Daily Calendar Post ────────────────────────────────
+// ── 5:00 AM ET — Daily Calendar Post ────────────────────────────────
 
-const [daily630EDT, daily630EST] = etCronPair(6, 30);
+const [daily500EDT, daily500EST] = etCronPair(5, 0);
 
 export const econDailyCalendar = inngest.createFunction(
   {
     id: "econ-daily-calendar",
     retries: 3,
-    triggers: [{ cron: daily630EDT }, { cron: daily630EST }],
+    triggers: [{ cron: daily500EDT }, { cron: daily500EST }],
   },
   async ({ step }) => {
     const shouldRun: boolean = await step.run("check-schedule", async () => {
       if (!isMarketDay()) return false;
-      return isNearETTime(6, 30);
+      return isNearETTime(5, 0);
     });
     if (!shouldRun) return { skipped: true, reason: "DST dedup or not market day" };
 
@@ -155,8 +175,7 @@ export const econDailyCalendar = inngest.createFunction(
   }
 );
 
-// ── Every 1 min (6AM-4PM ET) — Pre-Event Alerts + Result Drops ─────
-// Combined into one function to minimize Inngest invocations.
+// ── Every 1 min (6AM-4PM ET) — Result Drops ────────────────────────
 
 const [alertsEDT, alertsEST] = etIntervalCronPair(1, 6, 16);
 
@@ -177,10 +196,9 @@ export const econAlertsEDT = inngest.createFunction(
     });
     if (!shouldRun) return { skipped: true };
 
-    await checkPreEventAlerts(step);
-    await checkResultDrops(step);
+    const resultSummary = await checkResultDrops(step);
 
-    return { checked: true };
+    return { checked: true, ...resultSummary };
   }
 );
 
@@ -200,58 +218,17 @@ export const econAlertsEST = inngest.createFunction(
     });
     if (!shouldRun) return { skipped: true };
 
-    await checkPreEventAlerts(step);
-    await checkResultDrops(step);
+    const resultSummary = await checkResultDrops(step);
 
-    return { checked: true };
+    return { checked: true, ...resultSummary };
   }
 );
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function checkPreEventAlerts(step: any): Promise<void> {
-  await step.run("check-pre-alerts", async () => {
+async function checkResultDrops(
+  step: GetStepTools<typeof inngest>
+): Promise<{ resultCandidates: number; resultsPosted: number }> {
+  return step.run("check-results", async () => {
     const today = getEasternDateString();
-    const { hour, minute } = getEasternTime();
-    const nowMinutes = hour * 60 + minute;
-
-    // Get high-impact events with unsent alerts
-    const { data: events } = await supabase
-      .from("econ_events")
-      .select("*")
-      .eq("event_date", today)
-      .eq("alert_sent", false)
-      .eq("impact", "high");
-
-    if (!events || events.length === 0) return;
-
-    for (const event of events as EconEventRow[]) {
-      if (!event.event_time) continue;
-
-      const [h, m] = event.event_time.split(":").map(Number);
-      const eventMinutes = h * 60 + m;
-
-      // Alert if event is 13-17 minutes away (±2 min tolerance for cron drift)
-      if (eventMinutes >= nowMinutes + 13 && eventMinutes <= nowMinutes + 17) {
-        const embed = buildPreEventAlertEmbed(event);
-        await postEmbed("econ-calendar", embed);
-
-        await supabase
-          .from("econ_events")
-          .update({ alert_sent: true })
-          .eq("id", event.id);
-
-        await logSuccess("pre-alert", { event: event.event_name });
-      }
-    }
-  });
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function checkResultDrops(step: any): Promise<void> {
-  await step.run("check-results", async () => {
-    const today = getEasternDateString();
-    const { hour, minute } = getEasternTime();
-    const nowMinutes = hour * 60 + minute;
 
     // Get events where actual is still null and event time has passed
     const { data: events } = await supabase
@@ -261,11 +238,14 @@ async function checkResultDrops(step: any): Promise<void> {
       .eq("result_posted", false)
       .not("event_time", "is", null);
 
-    if (!events || events.length === 0) return;
+    if (!events || events.length === 0) {
+      return { resultCandidates: 0, resultsPosted: 0 };
+    }
 
     // FRED doesn't provide real-time actual values, so result drops
     // are not available in V1. Skip result checking.
     // TODO V2: Use BLS API to fetch actual CPI/NFP values after release.
+    return { resultCandidates: events.length, resultsPosted: 0 };
   });
 }
 
