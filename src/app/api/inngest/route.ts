@@ -109,12 +109,10 @@ export const { GET, POST, PUT } = serve({
     priceAlertsExtPostEDT,
     priceAlertsExtPostEST,
 
-    // Flow / Sentiment — DISABLED (placeholder)
-    // flowShortInterest,
-    // flowOptionsScanEDT,
-    // flowOptionsScanEST,
-    // flowRedditScan,
-    // flowWeeklySqueezeWatch,
+    // Flow / Sentiment (3 functions — options scan still disabled)
+    flowShortInterest,
+    flowRedditScan,
+    flowWeeklySqueezeWatch,
 
     // Maintenance (1 function)
     newsCleanup,
