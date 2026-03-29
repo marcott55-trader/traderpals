@@ -269,9 +269,10 @@ function buildQuestionEmbed(
     .map((opt, i) => `**${ANSWER_LABELS[i]}.** ${opt}`)
     .join("\n");
 
+  const questionText = `**${q.question}**`;
   const description = feedback
-    ? `${feedback}\n\n${optionLines}`
-    : optionLines;
+    ? `${feedback}\n\n${questionText}\n\n${optionLines}`
+    : `${questionText}\n\n${optionLines}`;
 
   return {
     title: `Question ${index + 1}/${quizLen}`,
@@ -281,7 +282,6 @@ function buildQuestionEmbed(
       { name: "Topic", value: q.topic, inline: true },
       { name: "Score", value: `${score}/${index}`, inline: true },
     ],
-    footer: { text: q.question },
   };
 }
 
@@ -327,7 +327,7 @@ function handleQuizCommand(options: CommandOption[]): NextResponse {
       data: {
         embeds: [{
           title: "📚 Select a Quiz",
-          description: "Choose a book to test your knowledge on:",
+          description: "Choose a book below to test your knowledge.\nYou'll get 10 random questions — answer A/B/C/D.\nYour score is tracked and posted on the daily leaderboard!",
           color: 0x5865f2,
         }],
         components: [{
@@ -375,7 +375,7 @@ function startQuiz(bookId: number, chapter?: number): NextResponse {
       embeds: [
         {
           title: `📖 ${bookTitle}${chapter != null ? ` — Chapter ${chapter}` : ""}`,
-          description: `${quizLen} questions. Good luck!`,
+          description: `${quizLen} questions — pick A/B/C/D for each. Good luck!`,
           color: 0x5865f2,
         },
         ...(embed ? [embed] : []),
