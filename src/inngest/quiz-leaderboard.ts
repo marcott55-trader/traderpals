@@ -33,32 +33,36 @@ export const quizDailyLeaderboard = inngest.createFunction(
 
       const { data: scores } = await supabase
         .from("quiz_scores")
-        .select("discord_user_id, discord_username, score")
+        .select("discord_user_id, discord_username, score, total")
         .gte("completed_at", todayStart.toISOString())
         .order("score", { ascending: false });
 
       if (!scores || scores.length === 0) return false;
 
-      // Best score per user
-      const best = new Map<string, { username: string; score: number }>();
+      // Best score per user (by percentage since quizzes can have different lengths)
+      const best = new Map<string, { username: string; score: number; total: number }>();
       for (const s of scores) {
         const existing = best.get(s.discord_user_id);
-        if (!existing || s.score > existing.score) {
+        const pct = s.score / (s.total || 10);
+        const existingPct = existing ? existing.score / existing.total : 0;
+        if (!existing || pct > existingPct) {
           best.set(s.discord_user_id, {
             username: s.discord_username,
             score: s.score,
+            total: s.total ?? 10,
           });
         }
       }
 
       const ranked = Array.from(best.values())
-        .sort((a, b) => b.score - a.score)
+        .sort((a, b) => (b.score / b.total) - (a.score / a.total))
         .slice(0, 10);
 
       const medals = ["🥇", "🥈", "🥉"];
       const lines = ranked.map((entry, i) => {
         const prefix = medals[i] ?? `${i + 1}.`;
-        return `${prefix} **${entry.username}** — ${entry.score}/10`;
+        const pct = Math.round((entry.score / entry.total) * 100);
+        return `${prefix} **${entry.username}** — ${entry.score}/${entry.total} (${pct}%)`;
       });
 
       const embed: DiscordEmbed = {

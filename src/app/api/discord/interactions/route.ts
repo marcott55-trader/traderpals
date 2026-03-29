@@ -24,8 +24,10 @@ import { isValidTickerFormat, normalizeTicker } from "@/lib/tickers";
 import {
   getRandomQuestionIds,
   getQuestionById,
+  getAvailableBooks,
+  getBookQuestions,
   QUIZ_LENGTH,
-} from "@/lib/quiz-questions";
+} from "@/lib/quiz";
 
 // Discord interaction types
 const INTERACTION_TYPE_PING = 1;
@@ -252,13 +254,15 @@ async function handleAlertsListCommand(userId: string): Promise<NextResponse> {
 const ANSWER_LABELS = ["A", "B", "C", "D"] as const;
 
 function buildQuestionEmbed(
+  bookId: number,
   questionIds: number[],
   index: number,
+  quizLen: number,
   score: number,
   feedback?: string
 ) {
   const qId = questionIds[index];
-  const q = getQuestionById(qId);
+  const q = getQuestionById(bookId, qId);
   if (!q) return null;
 
   const optionLines = q.options
@@ -270,7 +274,7 @@ function buildQuestionEmbed(
     : optionLines;
 
   return {
-    title: `Question ${index + 1}/${QUIZ_LENGTH}`,
+    title: `Question ${index + 1}/${quizLen}`,
     description,
     color: 0x5865f2, // Discord blurple
     fields: [
@@ -282,10 +286,13 @@ function buildQuestionEmbed(
 }
 
 function buildQuestionButtons(
+  bookId: number,
   questionIds: number[],
   index: number,
+  quizLen: number,
   score: number
 ) {
+  // custom_id format: quiz:{bookId}:{questionIds}:{index}:{answer}:{score}:{quizLen}
   const idsStr = questionIds.join("-");
   return {
     type: 1, // ACTION_ROW
@@ -293,24 +300,103 @@ function buildQuestionButtons(
       type: 2, // BUTTON
       style: 1, // PRIMARY
       label,
-      custom_id: `quiz:${idsStr}:${index}:${i}:${score}`,
+      custom_id: `quiz:${bookId}:${idsStr}:${index}:${i}:${score}:${quizLen}`,
     })),
   };
 }
 
-function handleQuizCommand(): NextResponse {
-  const questionIds = getRandomQuestionIds(QUIZ_LENGTH);
-  const embed = buildQuestionEmbed(questionIds, 0, 0);
-  const actionRow = buildQuestionButtons(questionIds, 0, 0);
+function handleQuizCommand(options: CommandOption[]): NextResponse {
+  const opts = new Map(options.map((o) => [o.name, o.value]));
+  const bookIdOpt = opts.get("book");
+
+  // If no book specified, show the book selection menu
+  if (bookIdOpt == null) {
+    const books = getAvailableBooks();
+    if (books.length === 0) {
+      return respondEphemeral("No quizzes available yet.");
+    }
+
+    const selectOptions = books.map((b) => ({
+      label: `#${b.id} — ${b.shortTitle}`,
+      description: `${b.questionCount} questions`,
+      value: String(b.id),
+    }));
+
+    return NextResponse.json({
+      type: RESPONSE_MESSAGE,
+      data: {
+        embeds: [{
+          title: "📚 Select a Quiz",
+          description: "Choose a book to test your knowledge on:",
+          color: 0x5865f2,
+        }],
+        components: [{
+          type: 1, // ACTION_ROW
+          components: [{
+            type: 3, // STRING_SELECT
+            custom_id: "quiz_select",
+            placeholder: "Choose a book...",
+            options: selectOptions,
+          }],
+        }],
+        flags: 64, // ephemeral
+      },
+    });
+  }
+
+  // Book specified — start the quiz
+  const bookId = Number(bookIdOpt);
+  const chapter = opts.has("chapter") ? Number(opts.get("chapter")) : undefined;
+  return startQuiz(bookId, chapter);
+}
+
+function startQuiz(bookId: number, chapter?: number): NextResponse {
+  const pool = getBookQuestions(bookId, chapter);
+  if (pool.length === 0) {
+    return respondEphemeral(
+      chapter != null
+        ? `No questions found for Book #${bookId}, Chapter ${chapter}.`
+        : `No questions found for Book #${bookId}.`
+    );
+  }
+
+  const quizLen = Math.min(QUIZ_LENGTH, pool.length);
+  const questionIds = getRandomQuestionIds(bookId, quizLen, chapter);
+  const embed = buildQuestionEmbed(bookId, questionIds, 0, quizLen, 0);
+  const actionRow = buildQuestionButtons(bookId, questionIds, 0, quizLen, 0);
+
+  const books = getAvailableBooks();
+  const book = books.find((b) => b.id === bookId);
+  const bookTitle = book?.shortTitle ?? `Book #${bookId}`;
 
   return NextResponse.json({
     type: RESPONSE_MESSAGE,
     data: {
-      embeds: embed ? [embed] : [],
+      embeds: [
+        {
+          title: `📖 ${bookTitle}${chapter != null ? ` — Chapter ${chapter}` : ""}`,
+          description: `${quizLen} questions. Good luck!`,
+          color: 0x5865f2,
+        },
+        ...(embed ? [embed] : []),
+      ],
       components: [actionRow],
       flags: 64, // ephemeral
     },
   });
+}
+
+function respondEphemeral(content: string): NextResponse {
+  return NextResponse.json({
+    type: RESPONSE_MESSAGE,
+    data: { content, flags: 64 },
+  });
+}
+
+function handleQuizSelect(values: string[]): NextResponse {
+  const bookId = parseInt(values[0], 10);
+  if (isNaN(bookId)) return respondEphemeral("Invalid selection.");
+  return startQuiz(bookId);
 }
 
 async function handleQuizButton(
@@ -318,57 +404,64 @@ async function handleQuizButton(
   userId: string,
   username: string
 ): Promise<NextResponse> {
-  // Parse: quiz:{ids}:{index}:{answer}:{score}
+  // Parse: quiz:{bookId}:{ids}:{index}:{answer}:{score}:{quizLen}
   const parts = customId.split(":");
-  if (parts.length !== 5) {
+  if (parts.length !== 7) {
     return NextResponse.json({
       type: RESPONSE_UPDATE_MESSAGE,
       data: { content: "Something went wrong. Try `/quiz` again.", components: [] },
     });
   }
 
-  const questionIds = parts[1].split("-").map(Number);
-  const index = parseInt(parts[2], 10);
-  const selectedAnswer = parseInt(parts[3], 10);
-  const previousScore = parseInt(parts[4], 10);
+  const bookId = parseInt(parts[1], 10);
+  const questionIds = parts[2].split("-").map(Number);
+  const index = parseInt(parts[3], 10);
+  const selectedAnswer = parseInt(parts[4], 10);
+  const previousScore = parseInt(parts[5], 10);
+  const quizLen = parseInt(parts[6], 10);
 
   // Grade the current question
-  const currentQ = getQuestionById(questionIds[index]);
+  const currentQ = getQuestionById(bookId, questionIds[index]);
   const isCorrect = currentQ ? selectedAnswer === currentQ.answer : false;
   const newScore = previousScore + (isCorrect ? 1 : 0);
 
   const correctLabel = currentQ ? ANSWER_LABELS[currentQ.answer] : "?";
+  const explanation = currentQ?.explanation ?? "";
   const feedback = isCorrect
-    ? `✅ Correct!`
-    : `❌ Wrong — the answer was **${correctLabel}**`;
+    ? `✅ Correct! ${explanation}`
+    : `❌ Wrong — the answer was **${correctLabel}**. ${explanation}`;
 
   const nextIndex = index + 1;
 
   // Quiz complete
-  if (nextIndex >= QUIZ_LENGTH) {
+  if (nextIndex >= quizLen) {
     // Save score
     const supabase = getSupabase();
     await supabase.from("quiz_scores").insert({
       discord_user_id: userId,
       discord_username: username,
       score: newScore,
-      total: QUIZ_LENGTH,
+      total: quizLen,
+      book_id: bookId,
     });
 
-    const pct = Math.round((newScore / QUIZ_LENGTH) * 100);
-    const color = newScore >= 8 ? 0x57f287 : newScore >= 5 ? 0xfee75c : 0xed4245;
+    const pct = Math.round((newScore / quizLen) * 100);
+    const color = pct >= 80 ? 0x57f287 : pct >= 50 ? 0xfee75c : 0xed4245;
     const message =
-      newScore === QUIZ_LENGTH ? "Perfect score! 🏆" :
-      newScore >= 8 ? "Great job! 🎯" :
-      newScore >= 5 ? "Not bad — keep studying! 📚" :
+      newScore === quizLen ? "Perfect score! 🏆" :
+      pct >= 80 ? "Great job! 🎯" :
+      pct >= 50 ? "Not bad — keep studying! 📚" :
       "Keep learning — review the Trader University channels! 💪";
+
+    const books = getAvailableBooks();
+    const bookTitle = books.find((b) => b.id === bookId)?.shortTitle ?? `Book #${bookId}`;
 
     return NextResponse.json({
       type: RESPONSE_UPDATE_MESSAGE,
       data: {
         embeds: [{
-          title: "Quiz Complete!",
-          description: `${feedback}\n\nYou scored **${newScore}/${QUIZ_LENGTH}** (${pct}%)\n\n${message}`,
+          title: `Quiz Complete — ${bookTitle}`,
+          description: `${feedback}\n\nYou scored **${newScore}/${quizLen}** (${pct}%)\n\n${message}`,
           color,
         }],
         components: [],
@@ -377,8 +470,8 @@ async function handleQuizButton(
   }
 
   // Next question
-  const embed = buildQuestionEmbed(questionIds, nextIndex, newScore, feedback);
-  const actionRow = buildQuestionButtons(questionIds, nextIndex, newScore);
+  const embed = buildQuestionEmbed(bookId, questionIds, nextIndex, quizLen, newScore, feedback);
+  const actionRow = buildQuestionButtons(bookId, questionIds, nextIndex, quizLen, newScore);
 
   return NextResponse.json({
     type: RESPONSE_UPDATE_MESSAGE,
@@ -425,7 +518,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (commandName === "quiz") {
-      return handleQuizCommand();
+      return handleQuizCommand(options);
     }
 
     return respond("Unknown command.");
@@ -436,6 +529,11 @@ export async function POST(request: NextRequest) {
     const customId: string = interaction.data.custom_id ?? "";
     const userId = interaction.member?.user?.id ?? interaction.user?.id;
     const username = interaction.member?.user?.username ?? interaction.user?.username ?? "unknown";
+
+    if (customId === "quiz_select") {
+      const values: string[] = interaction.data.values ?? [];
+      return handleQuizSelect(values);
+    }
 
     if (customId.startsWith("quiz:")) {
       return handleQuizButton(customId, userId, username);

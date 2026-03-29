@@ -64,6 +64,20 @@ const commands = [
   {
     name: "quiz",
     description: "Test your trading knowledge with a 10-question quiz",
+    options: [
+      {
+        name: "book",
+        description: "Book number (0 = General Basics, 1-18 = specific book)",
+        type: 4, // INTEGER
+        required: false,
+      },
+      {
+        name: "chapter",
+        description: "Chapter number (optional — for chapter-specific quizzes)",
+        type: 4, // INTEGER
+        required: false,
+      },
+    ],
   },
 ];
 

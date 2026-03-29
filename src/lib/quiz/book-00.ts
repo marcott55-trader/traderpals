@@ -1,26 +1,26 @@
 /**
- * Quiz Question Bank — Beginner Trading Knowledge
+ * Book 0 — General Basics (Trader University Guides)
  *
- * Sourced from TraderPals Trader University materials:
+ * Questions sourced from:
  *   - Beginner Day Trader Roadmap
  *   - Futures Terms Guide
  *   - Wash Sale Rule Guide
  */
 
-export interface QuizQuestion {
-  id: number;
-  topic: string;
-  question: string;
-  options: [string, string, string, string];
-  answer: number; // 0-3 index
-}
+import type { QuizQuestion } from "./types";
 
-export const QUIZ_LENGTH = 10;
+export const BOOK_00_META = {
+  id: 0,
+  title: "General Trading Basics",
+  shortTitle: "General Basics",
+};
 
-export const QUIZ_QUESTIONS: QuizQuestion[] = [
-  // ── Day Trading Basics (from Beginner Day Trader Roadmap) ──────────
+export const BOOK_00_QUESTIONS: QuizQuestion[] = [
+  // ── Day Trading Basics ─────────────────────────────────────────────
   {
     id: 1,
+    bookId: 0,
+    chapter: null,
     topic: "Day Trading Basics",
     question: "What is the main focus of day trading?",
     options: [
@@ -30,9 +30,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Buying and holding index funds",
     ],
     answer: 1,
+    explanation: "Day trading focuses on buying and selling within the same trading day to profit from intraday price movement.",
   },
   {
     id: 2,
+    bookId: 0,
+    chapter: null,
     topic: "Day Trading Basics",
     question: "According to the Beginner Roadmap, what should you do BEFORE going live with real money?",
     options: [
@@ -42,9 +45,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Buy the most popular stock on social media",
     ],
     answer: 2,
+    explanation: "Step 7 of the Roadmap: backtest historical charts and practice in real time using paper trading before risking real money.",
   },
   {
     id: 3,
+    bookId: 0,
+    chapter: null,
     topic: "Day Trading Basics",
     question: "What is the recommended maximum risk per trade for a beginner day trader?",
     options: [
@@ -54,9 +60,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "50% of your account",
     ],
     answer: 2,
+    explanation: "The Roadmap recommends a max 1% per trade, 3% per day risk rule to protect your capital.",
   },
   {
     id: 4,
+    bookId: 0,
+    chapter: null,
     topic: "Day Trading Basics",
     question: "What is the recommended maximum daily risk for a beginner?",
     options: [
@@ -66,9 +75,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "No limit — keep trading until you make it back",
     ],
     answer: 0,
+    explanation: "The 1% per trade / 3% per day rule helps prevent catastrophic drawdowns early in your trading career.",
   },
   {
     id: 5,
+    bookId: 0,
+    chapter: null,
     topic: "Day Trading Basics",
     question: "Why is journaling every trade important?",
     options: [
@@ -78,9 +90,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "It replaces the need for a trading plan",
     ],
     answer: 1,
+    explanation: "Step 9: journaling helps you identify patterns in your behavior, learn from mistakes, and track progress over time.",
   },
   {
     id: 6,
+    bookId: 0,
+    chapter: null,
     topic: "Day Trading Basics",
     question: "What does 'mastering your psychology' as a trader mean?",
     options: [
@@ -90,11 +105,14 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Ignoring your losses completely",
     ],
     answer: 1,
+    explanation: "Step 10: emotional discipline means recognizing and controlling destructive behaviors like FOMO and revenge trading.",
   },
 
   // ── Market Sessions & Order Types ──────────────────────────────────
   {
     id: 7,
+    bookId: 0,
+    chapter: null,
     topic: "Market Sessions",
     question: "What are the regular US stock market trading hours (Eastern Time)?",
     options: [
@@ -104,9 +122,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "7:00 AM – 5:00 PM",
     ],
     answer: 1,
+    explanation: "Regular trading hours for NYSE and NASDAQ are 9:30 AM to 4:00 PM Eastern Time.",
   },
   {
     id: 8,
+    bookId: 0,
+    chapter: null,
     topic: "Market Sessions",
     question: "What is 'pre-market' trading?",
     options: [
@@ -116,9 +137,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Trading only available to institutional investors",
     ],
     answer: 1,
+    explanation: "Pre-market trading occurs before 9:30 AM ET, typically starting at 4:00 AM, with lower liquidity and wider spreads.",
   },
   {
     id: 9,
+    bookId: 0,
+    chapter: null,
     topic: "Market Sessions",
     question: "What type of order guarantees execution but NOT the price?",
     options: [
@@ -128,9 +152,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Trailing stop order",
     ],
     answer: 2,
+    explanation: "A market order fills immediately at the best available price, guaranteeing execution but not a specific price.",
   },
   {
     id: 10,
+    bookId: 0,
+    chapter: null,
     topic: "Market Sessions",
     question: "What type of order lets you set the maximum price you're willing to pay?",
     options: [
@@ -140,9 +167,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Fill-or-kill order",
     ],
     answer: 1,
+    explanation: "A limit order specifies the maximum buy price (or minimum sell price), but may not fill if the market doesn't reach your price.",
   },
   {
     id: 11,
+    bookId: 0,
+    chapter: null,
     topic: "Market Sessions",
     question: "What is the Pattern Day Trader (PDT) rule?",
     options: [
@@ -152,9 +182,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "You need a special license to day trade",
     ],
     answer: 1,
+    explanation: "FINRA's PDT rule restricts accounts under $25,000 to 3 day trades per rolling 5-business-day period.",
   },
   {
     id: 12,
+    bookId: 0,
+    chapter: null,
     topic: "Market Sessions",
     question: "Why is liquidity typically lower during pre-market and after-hours sessions?",
     options: [
@@ -164,11 +197,14 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Stocks are frozen during those times",
     ],
     answer: 2,
+    explanation: "Extended hours have fewer active traders, resulting in lower volume, wider bid-ask spreads, and more volatile price swings.",
   },
 
   // ── Technical Analysis ─────────────────────────────────────────────
   {
     id: 13,
+    bookId: 0,
+    chapter: null,
     topic: "Technical Analysis",
     question: "What does VWAP stand for?",
     options: [
@@ -178,9 +214,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Variable Width Average Pattern",
     ],
     answer: 1,
+    explanation: "VWAP (Volume Weighted Average Price) is an intraday benchmark that shows the average price weighted by volume.",
   },
   {
     id: 14,
+    bookId: 0,
+    chapter: null,
     topic: "Technical Analysis",
     question: "If a stock is trading ABOVE VWAP, what does that generally indicate?",
     options: [
@@ -190,9 +229,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "The stock has low volume",
     ],
     answer: 2,
+    explanation: "Trading above VWAP means buyers have been more aggressive on average, indicating intraday bullish control.",
   },
   {
     id: 15,
+    bookId: 0,
+    chapter: null,
     topic: "Technical Analysis",
     question: "What are common EMA periods used by day traders according to the Roadmap?",
     options: [
@@ -202,9 +244,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "1, 2, and 3",
     ],
     answer: 1,
+    explanation: "The Roadmap lists VWAP, EMAs (9, 21, 55), EWO, Volume, MA200, and Super Trend as key indicators to study.",
   },
   {
     id: 16,
+    bookId: 0,
+    chapter: null,
     topic: "Technical Analysis",
     question: "What is a 'support level'?",
     options: [
@@ -214,9 +259,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "The price where your broker blocks your order",
     ],
     answer: 0,
+    explanation: "Support is a price level where buying interest tends to prevent further decline, creating a 'floor' for the price.",
   },
   {
     id: 17,
+    bookId: 0,
+    chapter: null,
     topic: "Technical Analysis",
     question: "What is a 'breakout' setup?",
     options: [
@@ -226,9 +274,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "When you break out of a losing streak",
     ],
     answer: 1,
+    explanation: "A breakout occurs when price pushes through resistance with conviction (volume), often signaling a new trend leg.",
   },
   {
     id: 18,
+    bookId: 0,
+    chapter: null,
     topic: "Technical Analysis",
     question: "What is a 'bull flag' pattern?",
     options: [
@@ -238,11 +289,14 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "When the stock price forms the letter F on the chart",
     ],
     answer: 1,
+    explanation: "A bull flag is a continuation pattern — a strong upward move (flagpole) followed by a tight consolidation before the next leg up.",
   },
 
-  // ── Futures Basics (from Futures Terms Guide) ──────────────────────
+  // ── Futures Basics ─────────────────────────────────────────────────
   {
     id: 19,
+    bookId: 0,
+    chapter: null,
     topic: "Futures Basics",
     question: "What is a futures contract?",
     options: [
@@ -252,9 +306,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "A savings bond issued by the government",
     ],
     answer: 1,
+    explanation: "A futures contract obligates the buyer to purchase and the seller to sell an asset at a set price on a specific future date.",
   },
   {
     id: 20,
+    bookId: 0,
+    chapter: null,
     topic: "Futures Basics",
     question: "What is 'margin' in futures trading?",
     options: [
@@ -264,9 +321,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "The commission your broker charges",
     ],
     answer: 1,
+    explanation: "Margin is a security deposit ensuring you can fulfill the contract, not the full value of the position.",
   },
   {
     id: 21,
+    bookId: 0,
+    chapter: null,
     topic: "Futures Basics",
     question: "What happens if your account falls below the 'maintenance margin'?",
     options: [
@@ -276,9 +336,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Nothing — it only matters at expiration",
     ],
     answer: 1,
+    explanation: "Falling below maintenance margin triggers a margin call — you must deposit additional funds or your position may be liquidated.",
   },
   {
     id: 22,
+    bookId: 0,
+    chapter: null,
     topic: "Futures Basics",
     question: "What does 'going long' in futures mean?",
     options: [
@@ -288,9 +351,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Borrowing shares from your broker",
     ],
     answer: 1,
+    explanation: "Going long = buying. You profit when the underlying asset's price rises above your entry price.",
   },
   {
     id: 23,
+    bookId: 0,
+    chapter: null,
     topic: "Futures Basics",
     question: "What does 'going short' in futures mean?",
     options: [
@@ -300,9 +366,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Trading micro contracts instead of full-size",
     ],
     answer: 2,
+    explanation: "Going short = selling. You profit when the underlying asset's price falls below your entry price.",
   },
   {
     id: 24,
+    bookId: 0,
+    chapter: null,
     topic: "Futures Basics",
     question: "What is 'open interest' in futures?",
     options: [
@@ -312,14 +381,16 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "The number of people watching a ticker",
     ],
     answer: 1,
+    explanation: "Open interest measures the total number of active contracts, indicating market activity and liquidity.",
   },
 
-  // ── Wash Sale Rule & Tax Rules ─────────────────────────────────────
+  // ── Wash Sale Rule ─────────────────────────────────────────────────
   {
     id: 25,
+    bookId: 0,
+    chapter: null,
     topic: "Wash Sale Rule",
-    question:
-      "What is the wash sale rule?",
+    question: "What is the wash sale rule?",
     options: [
       "You must wash your hands before trading",
       "You cannot sell and rebuy a substantially identical security within 30 days and claim the tax loss",
@@ -327,9 +398,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "All trading losses are tax-deductible without limits",
     ],
     answer: 1,
+    explanation: "The wash sale rule prevents you from claiming a tax loss if you repurchase the same or similar security within 30 days.",
   },
   {
     id: 26,
+    bookId: 0,
+    chapter: null,
     topic: "Wash Sale Rule",
     question: "If a wash sale occurs, what happens to the disallowed loss?",
     options: [
@@ -339,9 +413,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "It carries forward as a capital gains credit",
     ],
     answer: 1,
+    explanation: "The disallowed loss is added to the cost basis of the new shares, deferring (not eliminating) the tax benefit.",
   },
   {
     id: 27,
+    bookId: 0,
+    chapter: null,
     topic: "Wash Sale Rule",
     question: "What does 'substantially identical' mean in the wash sale rule?",
     options: [
@@ -351,12 +428,14 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Any security you have traded before",
     ],
     answer: 2,
+    explanation: "Substantially identical includes the same stock and close derivatives like options on that stock or funds tracking the same index.",
   },
   {
     id: 28,
+    bookId: 0,
+    chapter: null,
     topic: "Wash Sale Rule",
-    question:
-      "You sell 100 shares of XYZ at a $50 loss, then buy XYZ back 15 days later. Can you deduct the $50 loss this year?",
+    question: "You sell 100 shares of XYZ at a $50 loss, then buy XYZ back 15 days later. Can you deduct the $50 loss this year?",
     options: [
       "Yes — you already sold the shares",
       "Yes — but only half the loss",
@@ -364,9 +443,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "No — losses on stocks are never tax-deductible",
     ],
     answer: 2,
+    explanation: "Repurchasing the same security within 30 days triggers a wash sale — the $50 loss is added to the new shares' cost basis instead.",
   },
   {
     id: 29,
+    bookId: 0,
+    chapter: null,
     topic: "Wash Sale Rule",
     question: "Does the wash sale rule apply to transactions in retirement accounts (IRA, 401k)?",
     options: [
@@ -376,9 +458,12 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "Only if you are over 59½ years old",
     ],
     answer: 1,
+    explanation: "Buying in an IRA within 30 days of a taxable loss sale still triggers the wash sale rule, and in this case the loss may be permanently disallowed.",
   },
   {
     id: 30,
+    bookId: 0,
+    chapter: null,
     topic: "Wash Sale Rule",
     question: "What is the purpose of the wash sale rule?",
     options: [
@@ -388,20 +473,6 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       "To prevent insider trading",
     ],
     answer: 0,
+    explanation: "The rule stops people from selling at a loss for a tax break and immediately rebuying to keep their position unchanged.",
   },
 ];
-
-/** Pick `count` random questions and return their IDs */
-export function getRandomQuestionIds(count: number): number[] {
-  const ids = QUIZ_QUESTIONS.map((q) => q.id);
-  // Fisher-Yates shuffle
-  for (let i = ids.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-  }
-  return ids.slice(0, count);
-}
-
-export function getQuestionById(id: number): QuizQuestion | undefined {
-  return QUIZ_QUESTIONS.find((q) => q.id === id);
-}
