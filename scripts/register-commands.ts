@@ -61,6 +61,10 @@ const commands = [
     name: "alerts",
     description: "List your active price alerts",
   },
+  {
+    name: "quiz",
+    description: "Test your trading knowledge with a 10-question quiz",
+  },
 ];
 
 async function registerCommands() {

@@ -63,6 +63,9 @@ import {
 // News cleanup
 import { newsCleanup } from "@/inngest/news-cleanup";
 
+// Quiz
+import { quizDailyLeaderboard } from "@/inngest/quiz-leaderboard";
+
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
@@ -110,5 +113,8 @@ export const { GET, POST, PUT } = serve({
 
     // Maintenance
     newsCleanup,
+
+    // Quiz
+    quizDailyLeaderboard,
   ],
 });

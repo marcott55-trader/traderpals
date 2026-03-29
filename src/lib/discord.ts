@@ -8,6 +8,7 @@ export type Channel =
   | "earnings"
   | "alerts"
   | "flow"
+  | "quiz"
   | "bot-logs";
 
 const WEBHOOK_ENV_MAP: Record<Channel, string> = {
@@ -18,6 +19,7 @@ const WEBHOOK_ENV_MAP: Record<Channel, string> = {
   earnings: "DISCORD_WEBHOOK_EARNINGS",
   alerts: "DISCORD_WEBHOOK_ALERTS",
   flow: "DISCORD_WEBHOOK_FLOW",
+  quiz: "DISCORD_WEBHOOK_QUIZ",
   "bot-logs": "DISCORD_WEBHOOK_BOT_LOGS",
 };
 

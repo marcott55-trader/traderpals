@@ -21,14 +21,21 @@ import { MAX_ALERTS_PER_USER } from "@/types/alerts";
 import type { AlertType } from "@/types/alerts";
 import { hasCompanyProfile } from "@/lib/finnhub";
 import { isValidTickerFormat, normalizeTicker } from "@/lib/tickers";
+import {
+  getRandomQuestionIds,
+  getQuestionById,
+  QUIZ_LENGTH,
+} from "@/lib/quiz-questions";
 
 // Discord interaction types
 const INTERACTION_TYPE_PING = 1;
 const INTERACTION_TYPE_COMMAND = 2;
+const INTERACTION_TYPE_COMPONENT = 3;
 
 // Discord response types
 const RESPONSE_PONG = 1;
 const RESPONSE_MESSAGE = 4;
+const RESPONSE_UPDATE_MESSAGE = 7;
 
 // ── Signature verification ──────────────────────────────────────────
 
@@ -240,6 +247,148 @@ async function handleAlertsListCommand(userId: string): Promise<NextResponse> {
   return respond(`**Your Active Alerts (${alerts.length}):**\n${lines.join("\n")}`);
 }
 
+// ── Quiz handlers ──────────────────────────────────────────────────
+
+const ANSWER_LABELS = ["A", "B", "C", "D"] as const;
+
+function buildQuestionEmbed(
+  questionIds: number[],
+  index: number,
+  score: number,
+  feedback?: string
+) {
+  const qId = questionIds[index];
+  const q = getQuestionById(qId);
+  if (!q) return null;
+
+  const optionLines = q.options
+    .map((opt, i) => `**${ANSWER_LABELS[i]}.** ${opt}`)
+    .join("\n");
+
+  const description = feedback
+    ? `${feedback}\n\n${optionLines}`
+    : optionLines;
+
+  return {
+    title: `Question ${index + 1}/${QUIZ_LENGTH}`,
+    description,
+    color: 0x5865f2, // Discord blurple
+    fields: [
+      { name: "Topic", value: q.topic, inline: true },
+      { name: "Score", value: `${score}/${index}`, inline: true },
+    ],
+    footer: { text: q.question },
+  };
+}
+
+function buildQuestionButtons(
+  questionIds: number[],
+  index: number,
+  score: number
+) {
+  const idsStr = questionIds.join("-");
+  return {
+    type: 1, // ACTION_ROW
+    components: ANSWER_LABELS.map((label, i) => ({
+      type: 2, // BUTTON
+      style: 1, // PRIMARY
+      label,
+      custom_id: `quiz:${idsStr}:${index}:${i}:${score}`,
+    })),
+  };
+}
+
+function handleQuizCommand(): NextResponse {
+  const questionIds = getRandomQuestionIds(QUIZ_LENGTH);
+  const embed = buildQuestionEmbed(questionIds, 0, 0);
+  const actionRow = buildQuestionButtons(questionIds, 0, 0);
+
+  return NextResponse.json({
+    type: RESPONSE_MESSAGE,
+    data: {
+      embeds: embed ? [embed] : [],
+      components: [actionRow],
+      flags: 64, // ephemeral
+    },
+  });
+}
+
+async function handleQuizButton(
+  customId: string,
+  userId: string,
+  username: string
+): Promise<NextResponse> {
+  // Parse: quiz:{ids}:{index}:{answer}:{score}
+  const parts = customId.split(":");
+  if (parts.length !== 5) {
+    return NextResponse.json({
+      type: RESPONSE_UPDATE_MESSAGE,
+      data: { content: "Something went wrong. Try `/quiz` again.", components: [] },
+    });
+  }
+
+  const questionIds = parts[1].split("-").map(Number);
+  const index = parseInt(parts[2], 10);
+  const selectedAnswer = parseInt(parts[3], 10);
+  const previousScore = parseInt(parts[4], 10);
+
+  // Grade the current question
+  const currentQ = getQuestionById(questionIds[index]);
+  const isCorrect = currentQ ? selectedAnswer === currentQ.answer : false;
+  const newScore = previousScore + (isCorrect ? 1 : 0);
+
+  const correctLabel = currentQ ? ANSWER_LABELS[currentQ.answer] : "?";
+  const feedback = isCorrect
+    ? `✅ Correct!`
+    : `❌ Wrong — the answer was **${correctLabel}**`;
+
+  const nextIndex = index + 1;
+
+  // Quiz complete
+  if (nextIndex >= QUIZ_LENGTH) {
+    // Save score
+    const supabase = getSupabase();
+    await supabase.from("quiz_scores").insert({
+      discord_user_id: userId,
+      discord_username: username,
+      score: newScore,
+      total: QUIZ_LENGTH,
+    });
+
+    const pct = Math.round((newScore / QUIZ_LENGTH) * 100);
+    const color = newScore >= 8 ? 0x57f287 : newScore >= 5 ? 0xfee75c : 0xed4245;
+    const message =
+      newScore === QUIZ_LENGTH ? "Perfect score! 🏆" :
+      newScore >= 8 ? "Great job! 🎯" :
+      newScore >= 5 ? "Not bad — keep studying! 📚" :
+      "Keep learning — review the Trader University channels! 💪";
+
+    return NextResponse.json({
+      type: RESPONSE_UPDATE_MESSAGE,
+      data: {
+        embeds: [{
+          title: "Quiz Complete!",
+          description: `${feedback}\n\nYou scored **${newScore}/${QUIZ_LENGTH}** (${pct}%)\n\n${message}`,
+          color,
+        }],
+        components: [],
+      },
+    });
+  }
+
+  // Next question
+  const embed = buildQuestionEmbed(questionIds, nextIndex, newScore, feedback);
+  const actionRow = buildQuestionButtons(questionIds, nextIndex, newScore);
+
+  return NextResponse.json({
+    type: RESPONSE_UPDATE_MESSAGE,
+    data: {
+      embeds: embed ? [embed] : [],
+      components: [actionRow],
+    },
+  });
+}
+
 // ── Main handler ────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -275,7 +424,27 @@ export async function POST(request: NextRequest) {
       return handleAlertsListCommand(userId);
     }
 
+    if (commandName === "quiz") {
+      return handleQuizCommand();
+    }
+
     return respond("Unknown command.");
+  }
+
+  // Handle button interactions (quiz answers)
+  if (interaction.type === INTERACTION_TYPE_COMPONENT) {
+    const customId: string = interaction.data.custom_id ?? "";
+    const userId = interaction.member?.user?.id ?? interaction.user?.id;
+    const username = interaction.member?.user?.username ?? interaction.user?.username ?? "unknown";
+
+    if (customId.startsWith("quiz:")) {
+      return handleQuizButton(customId, userId, username);
+    }
+
+    return NextResponse.json({
+      type: RESPONSE_UPDATE_MESSAGE,
+      data: { content: "Unknown interaction." },
+    });
   }
 
   return NextResponse.json({ error: "Unknown interaction type" }, { status: 400 });
