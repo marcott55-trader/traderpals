@@ -15,6 +15,7 @@ import { BOOK_02_META, BOOK_02_QUESTIONS } from "./book-02";
 import { BOOK_03_META, BOOK_03_QUESTIONS } from "./book-03";
 import { BOOK_04_META, BOOK_04_QUESTIONS } from "./book-04";
 import { BOOK_05_META, BOOK_05_QUESTIONS } from "./book-05";
+import { BOOK_06_META, BOOK_06_QUESTIONS } from "./book-06";
 
 // ── Book Registry ────────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ const BOOK_REGISTRY: BookEntry[] = [
   { meta: BOOK_03_META, questions: BOOK_03_QUESTIONS },
   { meta: BOOK_04_META, questions: BOOK_04_QUESTIONS },
   { meta: BOOK_05_META, questions: BOOK_05_QUESTIONS },
+  { meta: BOOK_06_META, questions: BOOK_06_QUESTIONS },
 ];
 
 // ── Derived lookups (built once at import time) ──────────────────────
