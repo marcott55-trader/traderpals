@@ -318,7 +318,6 @@ function handleQuizCommand(options: CommandOption[]): NextResponse {
 
     const selectOptions = books.map((b) => ({
       label: `#${b.id} — ${b.shortTitle}`,
-      description: `${b.questionCount} questions`,
       value: String(b.id),
     }));
 
