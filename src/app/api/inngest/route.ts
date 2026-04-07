@@ -63,6 +63,18 @@ import {
 // News cleanup
 import { newsCleanup } from "@/inngest/news-cleanup";
 
+// Hot Picks (low float)
+import {
+  hotPicksPremarket430,
+  hotPicksPremarket530,
+  hotPicksPremarket630,
+  hotPicksPremarket730,
+  hotPicksAfterHours1630,
+  hotPicksAfterHours1730,
+  hotPicksAfterHours1830,
+  hotPicksAfterHours1930,
+} from "@/inngest/hot-picks";
+
 // Quiz
 import { quizDailyLeaderboard } from "@/inngest/quiz-leaderboard";
 
@@ -110,6 +122,16 @@ export const { GET, POST, PUT } = serve({
     // Flow / Sentiment
     flowShortInterest,
     flowWeeklySqueezeWatch,
+
+    // Hot Picks (low float)
+    hotPicksPremarket430,
+    hotPicksPremarket530,
+    hotPicksPremarket630,
+    hotPicksPremarket730,
+    hotPicksAfterHours1630,
+    hotPicksAfterHours1730,
+    hotPicksAfterHours1830,
+    hotPicksAfterHours1930,
 
     // Maintenance
     newsCleanup,

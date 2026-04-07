@@ -11,8 +11,8 @@ interface FeedConfig {
 }
 
 export const POLITICAL_FEEDS: FeedConfig[] = [
-  { url: "https://www.whitehouse.gov/feed/", source: "White House" },
-  { url: "https://www.politico.com/rss/politicopicks.xml", source: "Politico" },
+  { url: "https://www.whitehouse.gov/news/feed/", source: "White House" },
+  { url: "https://rss.politico.com/politics-news.xml", source: "Politico" },
   { url: "https://thehill.com/feed/", source: "The Hill" },
 ];
 
@@ -86,7 +86,7 @@ function decodeHtmlEntities(text: string): string {
 async function fetchFeed(feed: FeedConfig): Promise<RSSItem[]> {
   try {
     const res = await fetch(feed.url, {
-      headers: { "User-Agent": "traderpals-bot/1.0" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; TraderpalsBot/1.0)" },
       signal: AbortSignal.timeout(10_000),
     });
 
