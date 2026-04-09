@@ -40,6 +40,12 @@ yarn-error.log*
 # vercel — never commit CLI state or link config
 .vercel
 
+# claude code
+.claude/
+
+# audio files
+*.m4a
+
 # resources — PDFs, books, images (too large for git)
 /resources/
 
