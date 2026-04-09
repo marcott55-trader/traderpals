@@ -151,12 +151,12 @@ async function batchGetFreeFloat(
 /**
  * Scan Polygon gainers/losers for low free-float stocks.
  * Uses FMP API for real free float data (not shares outstanding).
- * Filters: free float 100K-20M, volume >= 100K, any price.
  */
 export async function getLowFloatMovers(
   minFloat: number = 100_000,
-  maxFloat: number = 20_000_000,
-  minVolume: number = 100_000
+  maxFloat: number = 100_000_000,
+  minVolume: number = 100_000,
+  minChangePct: number = 0
 ): Promise<{ gainers: LowFloatMover[]; losers: LowFloatMover[] }> {
   const [rawGainers, rawLosers] = await Promise.all([
     getTopGainers(),
@@ -182,13 +182,16 @@ export async function getLowFloatMovers(
     if (freeFloat === undefined) continue;
     if (freeFloat < minFloat || freeFloat > maxFloat) continue;
 
+    const changePct = t.todaysChangePerc ?? 0;
+    if (minChangePct > 0 && Math.abs(changePct) < minChangePct) continue;
+
     const price = t.lastTrade?.p ?? t.min?.c ?? t.prevDay?.c ?? 0;
     const vol = t.min?.av ?? t.day?.v ?? 0;
 
     lowFloat.push({
       ticker: t.ticker,
       price,
-      changePercent: t.todaysChangePerc ?? 0,
+      changePercent: changePct,
       volume: vol,
       float: freeFloat,
     });

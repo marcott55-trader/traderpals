@@ -102,10 +102,15 @@ async function fetchAndPostHotPicks(
     for (const row of lfConfig ?? []) lf[row.key] = row.value;
 
     const minFloat = parseInt(lf["lowfloat.min_float"] ?? "100000", 10);
-    const maxFloat = parseInt(lf["lowfloat.max_float"] ?? "20000000", 10);
     const minVol = parseInt(lf["lowfloat.min_volume"] ?? "100000", 10);
+    const minChange = parseFloat(lf["lowfloat.min_change_pct"] ?? "5");
 
-    return getLowFloatMovers(minFloat, maxFloat, minVol);
+    // Pre-market: float up to 100M | After-hours: float up to 1B
+    const maxFloat = session === "premarket"
+      ? parseInt(lf["lowfloat.max_float_premarket"] ?? "100000000", 10)
+      : parseInt(lf["lowfloat.max_float_afterhours"] ?? "1000000000", 10);
+
+    return getLowFloatMovers(minFloat, maxFloat, minVol, minChange);
   });
 
   const embed = buildHotPicksEmbed(session, gainers, losers);
