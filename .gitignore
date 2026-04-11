@@ -46,6 +46,9 @@ yarn-error.log*
 # audio files
 *.m4a
 
+# video project files
+/videos/
+
 # resources — PDFs, books, images (too large for git)
 /resources/
 
